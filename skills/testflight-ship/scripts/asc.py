@@ -432,9 +432,9 @@ def cmd_ensure_invited(args):
     pings the device. POSTing the tester to the build's individualTesters
     relationship flips state to INVITED, which is what triggers the push.
 
-    an example app build 1 (2026-05-03) hit this: every step of the
+    One app's build 1 (2026-05-03) hit this: every step of the
     canonical workflow was correct (group internal, hasAccessToAllBuilds,
-    tester attached, autoNotifyEnabled patched), but the user still got
+    tester attached, autoNotifyEnabled patched), but the tester still got
     nothing because tester.state stayed null. Linking via individualTesters
     resolved it.
     """
@@ -625,10 +625,10 @@ def cmd_auto_notify(args):
 
     Without this, internal testers won't get TestFlight push notifications
     when the build becomes available — the build sits in IN_BETA_TESTING
-    state but nobody knows it's there. an example app build 1 (2026-05-03)
+    state but nobody knows it's there. One app's build 1 (2026-05-03)
     hit this exact failure: the build was VALID, the internal group was
     set up, the tester was attached, but autoNotifyEnabled defaulted to
-    false on upload, so the user's phone never pinged.
+    false on upload, so the tester's phone never pinged.
     """
     if args.app_id and not args.build_id:
         # Resolve to the most recent build for the app.

@@ -1,7 +1,7 @@
 # App Store listing: metadata, screenshots, and the ASC API
 
 How to stage a full App Store listing headlessly (no submit), and the landmines
-that cost time the first time. Learned shipping an example app's 1.0 (2026-07-05).
+that cost time the first time. Learned shipping one app's 1.0 (2026-07-05).
 
 The short version: **`deliver` (`upload_to_app_store`) is reliable for text
 metadata and screenshots, but its category/app-info step throws `No data` on the
@@ -126,7 +126,7 @@ DELETE /appScreenshots/{id}   # for every id past the first per fileName
 ```
 
 **Expiring old builds is IRREVERSIBLE — do it by build number, never a lookup.**
-Two related traps, learned the hard way shipping an example app 0.1.0:
+Two related traps, learned the hard way shipping one app's 0.1.0:
 - **Going backwards in version shadows the new build.** If you drop from 1.0.0 to
   0.1.0, TestFlight groups builds by version string and surfaces the *higher*
   version (1.0.0) as the default, so the tester "still sees the old build" even

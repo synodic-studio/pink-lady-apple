@@ -216,12 +216,12 @@ fastlane/test_output/
 
 ### Setup (one-time per new app)
 
-**1. Ruby setup.** System Ruby 2.6 is read-only. Use mise-managed Ruby — it activates automatically in an interactive terminal (screen share), but Claude Code's headless shell needs `mise exec --` as a prefix:
+**1. Ruby setup.** System Ruby 2.6 is read-only. Use mise-managed Ruby — it activates automatically in an interactive terminal, but Claude Code's headless shell needs `mise exec --` as a prefix:
 ```bash
 # One-time install (headless OK):
 bundle config set --local path vendor/bundle && bundle install
 
-# From interactive terminal (screen share):
+# From an interactive terminal:
 bundle exec fastlane beta
 
 # From Claude Code / headless:

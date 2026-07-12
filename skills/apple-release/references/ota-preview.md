@@ -14,7 +14,7 @@ Works from any repo:
   --icon-emoji "📱"
 ```
 
-**Critical rules for `--name`:** Use the Debug display name (e.g. "an example app Dev", not "an example app"). This becomes the manifest `title` which iOS shows during install. Must match `CFBundleDisplayName` from the Debug build.
+**Critical rules for `--name`:** Use the Debug display name (e.g. "MyApp Dev", not "MyApp"). This becomes the manifest `title` which iOS shows during install. Must match `CFBundleDisplayName` from the Debug build.
 
 ## Details
 

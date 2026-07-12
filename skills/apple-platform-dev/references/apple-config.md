@@ -9,7 +9,7 @@ Template for your project's Apple/Swift development configuration. Fill in the p
 
 ## Tuist for New Swift Projects
 
-**All new Swift/iOS/macOS projects use Tuist** (`tuist init`) instead of creating Xcode projects via GUI. This enables fully CLI-driven project management -- critical for Telegram-based workflows where Xcode GUI is inaccessible.
+**All new Swift/iOS/macOS projects use Tuist** (`tuist init`) instead of creating Xcode projects via GUI. This enables fully CLI-driven project management -- critical for headless or remote workflows where the Xcode GUI is inaccessible.
 
 **Why Tuist:**
 - `tuist init` replaces "File > New Project"

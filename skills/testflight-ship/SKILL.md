@@ -77,7 +77,7 @@ Common capability values: `NFC_TAG_READING`, `ICLOUD`, `PUSH_NOTIFICATIONS`, `HE
 
 ### 1c. Create the app record (MANUAL — API is FORBIDDEN here)
 
-**Apple does not permit app creation via API-key auth.** `POST /v1/apps` returns `403 FORBIDDEN_ERROR` — "The resource 'apps' does not allow 'CREATE'". This has been Apple's policy since the v1 API launched. The only paths to create an app are the ASC web UI or `fastlane produce` with Apple ID + 2FA (which the user can't handle via Telegram).
+**Apple does not permit app creation via API-key auth.** `POST /v1/apps` returns `403 FORBIDDEN_ERROR` — "The resource 'apps' does not allow 'CREATE'". This has been Apple's policy since the v1 API launched. The only paths to create an app are the ASC web UI or `fastlane produce` with Apple ID + 2FA (which a headless, API-key-only workflow can't perform).
 
 The correct play: prompt the user with exact field values, wait for confirmation.
 
