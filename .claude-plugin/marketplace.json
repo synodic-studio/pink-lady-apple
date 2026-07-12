@@ -1,0 +1,14 @@
+{
+  "name": "pink-lady",
+  "owner": {
+    "name": "Synodic Studio"
+  },
+  "plugins": [
+    {
+      "name": "synodic-apple",
+      "source": "./",
+      "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging"
+    }
+  ],
+  "description": "Apple platform toolchain: iOS/macOS development patterns, Fastlane/TestFlight release automation, simulator capture, and debug builds"
+}

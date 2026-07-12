@@ -1,0 +1,8 @@
+{
+  "name": "synodic-apple",
+  "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging",
+  "author": {
+    "name": "Synodic Studio"
+  },
+  "version": "1.0.0"
+}

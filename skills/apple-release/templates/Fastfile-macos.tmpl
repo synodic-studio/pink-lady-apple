@@ -1,0 +1,124 @@
+# macOS release Fastfile.
+# Substitutions:
+#   APP_NAME          — product name without spaces (e.g. GravityWell)
+#   APP_IDENTIFIER    — bundle ID (e.g. com.example.GravityWell)
+#   PROJECT_FILE      — typically <APP_NAME>.xcodeproj
+#   DEPLOY_URL        — optional, the URL for custom distribution worker
+#                       (e.g. https://deploy.example.com). Omit the deploy
+#                       lane if the app doesn't use one.
+#   DEPLOY_TOKEN_KEY  — pass(1) key holding the bearer token for deploy
+#                       (e.g. "<deploy-token>")
+#
+# Invocation:
+#   mise exec -- bundle exec fastlane mac release   # archive + notarize + staple
+#   mise exec -- bundle exec fastlane mac deploy    # upload stapled zip to worker
+#   mise exec -- bundle exec fastlane mac ship      # both, end-to-end
+
+default_platform(:mac)
+
+PROJECT          = "PROJECT_FILE"
+SCHEME           = "APP_NAME"
+BUNDLE_ID        = "APP_IDENTIFIER"
+TEAM_ID          = "<TEAM_ID>"
+
+ARCHIVE_PATH     = "build/APP_NAME.xcarchive"
+EXPORT_DIR       = "build/export"
+EXPORT_NAME      = "APP_NAME"
+ZIP_PATH         = "#{EXPORT_DIR}/#{EXPORT_NAME}.zip"
+
+ASC_KEY_ID       = "<ASC_KEY_ID>"
+ASC_ISSUER_ID    = "<ASC_ISSUER_ID>"
+ASC_API_KEY_PATH = File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{ASC_KEY_ID}.p8")
+
+# Optional — only if the app uses a custom distribution worker
+DEPLOY_URL       = "DEPLOY_URL"
+DEPLOY_TOKEN_KEY = "DEPLOY_TOKEN_KEY"
+
+platform :mac do
+  desc "Archive, export with Developer ID, notarize, and staple the Release build"
+  lane :release do
+    UI.user_error!("ASC API key missing at #{ASC_API_KEY_PATH}") unless File.exist?(ASC_API_KEY_PATH)
+
+    build_mac_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "developer-id",
+      archive_path: ARCHIVE_PATH,
+      output_directory: EXPORT_DIR,
+      output_name: EXPORT_NAME,
+      xcargs: "-skipPackagePluginValidation",
+      destination: "generic/platform=macOS",
+      clean: false,
+      skip_package_pkg: true,
+      export_options: {
+        method: "developer-id",
+        teamID: TEAM_ID,
+        destination: "export",
+      },
+    )
+
+    notarize(
+      package: ZIP_PATH,
+      bundle_id: BUNDLE_ID,
+      api_key_path: ASC_API_KEY_PATH,
+      print_log: true,
+      verbose: true,
+    )
+
+    UI.success("Release notarized and stapled: #{ZIP_PATH}")
+  end
+
+  desc "Upload the notarized zip to the distribution worker"
+  lane :deploy do
+    UI.user_error!("No zip at #{ZIP_PATH}. Run `fastlane mac release` first.") unless File.exist?(ZIP_PATH)
+
+    token = ENV["DEPLOY_TOKEN"] || `pass show #{DEPLOY_TOKEN_KEY} 2>/dev/null`.strip
+    UI.user_error!("No deploy token — set DEPLOY_TOKEN env var or populate pass show #{DEPLOY_TOKEN_KEY}") if token.empty?
+
+    version      = get_version_number_from_xcodeproj(xcodeproj: PROJECT, target: SCHEME)
+    build        = get_build_number_from_xcodeproj(xcodeproj: PROJECT, target: SCHEME)
+    filename     = "#{EXPORT_NAME}-v#{version}-build#{build}.zip"
+    note         = "#{EXPORT_NAME} v#{version} (build #{build}) — customer release"
+
+    require "json"
+    require "uri"
+
+    encoded_note = URI.encode_www_form_component(note)
+    response = sh(
+      "curl -sS -X POST " \
+      "-H 'Authorization: Bearer #{token}' " \
+      "-H 'X-Filename: #{filename}' " \
+      "-H 'Content-Type: application/zip' " \
+      "--data-binary @#{ZIP_PATH} " \
+      "'#{DEPLOY_URL}/upload-file?note=#{encoded_note}'",
+      log: false,
+    )
+
+    begin
+      json = JSON.parse(response.strip)
+    rescue JSON::ParserError
+      UI.user_error!("Unexpected response from deploy worker: #{response}")
+    end
+
+    url = json["url"]
+    UI.user_error!("Upload response missing 'url' field: #{response}") if url.nil? || url.empty?
+
+    UI.success("Uploaded: #{url}")
+
+    File.open(".release-links.md", "a") do |f|
+      f.puts
+      f.puts "- #{Time.now.strftime('%Y-%m-%d %H:%M:%S %Z')} — v#{version} build #{build}"
+      f.puts "  - #{url}"
+      f.puts "  - SHA-256: `#{`shasum -a 256 #{ZIP_PATH}`.split.first}`"
+    end
+
+    url
+  end
+
+  desc "Full release pipeline: archive → notarize → staple → upload"
+  lane :ship do
+    release
+    deploy
+  end
+end
