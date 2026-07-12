@@ -1,6 +1,6 @@
 ---
 name: testflight-ship
-description: Use when uploading an Apple app to TestFlight, especially first-time app setup or when adding internal testers. Covers the full end-to-end workflow from bundle ID registration through tester invitation — prevents the common failure mode where the build ships but the tester is never invited, leaving the user unable to install the app. Triggers on "ship to TestFlight", "upload iOS build", "add TestFlight tester", "new TestFlight app", "create app in ASC", "distribute internal build", "testflight internal group", and any phrase about making a build available to internal testers. For general Fastlane/notarize setup see synodic-apple:apple-release.
+description: Use when uploading an Apple app to TestFlight, especially first-time app setup or when adding internal testers. Covers the full end-to-end workflow from bundle ID registration through tester invitation — prevents the common failure mode where the build ships but the tester is never invited, leaving the user unable to install the app. Triggers on "ship to TestFlight", "upload iOS build", "add TestFlight tester", "new TestFlight app", "create app in ASC", "distribute internal build", "testflight internal group", and any phrase about making a build available to internal testers. For general Fastlane/notarize setup see pink-lady:apple-release.
 ---
 
 # TestFlight Ship
@@ -32,9 +32,9 @@ If this is your second/third/fourth build to an app that already exists, skip to
 
 ## Companion skills
 
-- **`synodic-apple:apple-release`** — broader Fastlane plumbing: Ruby pinning, `prices` relationship bug, `xcrun altool` fallback, macOS notarization. Read that first if setting up a new repo's release tooling.
-- **`synodic-apple:apple-platform-dev`** — Tuist/SwiftUI conventions.
-- **`synodic-apple:debug-builds`** — Debug/Release separation with distinct bundle IDs.
+- **`pink-lady:apple-release`** — broader Fastlane plumbing: Ruby pinning, `prices` relationship bug, `xcrun altool` fallback, macOS notarization. Read that first if setting up a new repo's release tooling.
+- **`pink-lady:apple-platform-dev`** — Tuist/SwiftUI conventions.
+- **`pink-lady:debug-builds`** — Debug/Release separation with distinct bundle IDs.
 
 ## Environment (the user's setup)
 

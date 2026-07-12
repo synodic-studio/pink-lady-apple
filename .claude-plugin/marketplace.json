@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "synodic-apple",
+      "name": "pink-lady",
       "source": "./",
       "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging"
     }
