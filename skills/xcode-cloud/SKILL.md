@@ -382,13 +382,17 @@ These two paths do the same job and **should not both distribute for one app** �
 two uploads race for build numbers and you get duplicate-build rejections in
 ASC. Both may *build*; only one may upload.
 
-**Xcode Cloud is the better default for iOS TestFlight**, because it sidesteps
-the most fragile part of the local path. A headless Fastlane build needs the
-login keychain unlocked (`security unlock-keychain`) and a valid signing
-identity reachable from a shell that has no GUI session — the recurring
-`auid=-1` / Background-vs-Aqua problem. Xcode Cloud has Apple-managed signing and
-no keychain at all, so an entire class of "works interactively, fails headless"
-failures disappears.
+**Xcode Cloud is the more attractive default for iOS TestFlight — if uploading
+works on your team.** It sidesteps the most fragile part of the local path: a
+headless Fastlane build needs the login keychain unlocked
+(`security unlock-keychain`) and a signing identity reachable from a shell with
+no GUI session — the recurring `auid=-1` / Background-vs-Aqua problem. Xcode
+Cloud has Apple-managed signing and no keychain, so an entire class of "works
+interactively, fails headless" failures disappears.
+
+Verify the upload half before you rely on it, though — see the ASC
+authentication failure below. A sound plan is **archive in the cloud, upload from
+Fastlane** until you've seen a cloud upload actually reach TestFlight.
 
 **What Xcode Cloud does not do: invite testers.** An `ARCHIVE` with
 `buildDistributionAudience` set uploads the build and stops there. If the app's
@@ -438,6 +442,37 @@ app, and linking the wrong app's record fails with `409 STATE_ERROR`. Posting
 with the group relationship resolves the correct app-scoped record and preserves
 the tester's existing state — a tester already `INSTALLED` stays `INSTALLED`, so
 nobody gets re-invited.
+
+### Distribution can fail with an ASC authentication error
+
+Before committing to Xcode Cloud as the publishing path, **turn distribution on
+and run one build**. Archiving working proves nothing about uploading — they
+fail independently, and the upload half has a known Apple-side failure:
+
+```
+IDEDistribution.critical.log:
+  App Store Connect request for store configuration failed for account
+  Session Proxy Provider (Unable to authenticate with App Store Connect
+  (…DVTServicesSessionProviderCredentialITunesAuthenticationContextError Code=1))
+```
+
+The archive succeeds, then export dies here and the artifact comes out named
+`<App> <version> development.zip` rather than an App Store export — a useful
+tell that it fell back rather than failing outright.
+
+This is **not** caused by configuring distribution through the API, and it is not
+a role problem. It's widely reported, and Apple has confirmed at least some cases
+as a backend permission issue on the team that only Apple can fix. Accounts with
+Account Holder + Admin still hit it; re-adding the Apple ID in Xcode doesn't
+clear it.
+
+If you hit it:
+
+1. **Revert `buildDistributionAudience` to `null` immediately.** Otherwise every
+   push produces a failed build and burns compute for nothing.
+2. Keep archiving in the cloud and keep uploading via the Fastlane lane. This is
+   the concrete reason not to delete those lanes on migration day.
+3. Open a Feedback/DTS ticket if it persists — there is no user-side fix.
 
 ### Enabling distribution
 
