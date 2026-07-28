@@ -58,14 +58,15 @@ echo "▸ Installing mise…"
 brew install mise               # Homebrew is preinstalled on the runners
 eval "$(mise activate sh)"
 
-echo "▸ Installing pinned toolchain (.mise.toml)…"
-mise install
+echo "▸ Installing pinned Tuist…"
+# `mise install tuist`, never a bare `mise install` — see the warning below.
+mise install tuist
 
 echo "▸ Resolving Tuist-managed SPM dependencies…"
-mise exec -- tuist install
+mise exec tuist -- tuist install
 
 echo "▸ Generating the workspace from Project.swift…"
-mise exec -- tuist generate --no-open
+mise exec tuist -- tuist generate --no-open
 
 if [ ! -d "<Scheme>.xcworkspace" ]; then
     echo "error: tuist generate did not produce <Scheme>.xcworkspace" >&2
@@ -85,6 +86,22 @@ is already in `.mise.toml`:
 ruby  = "3.3.11"
 tuist = "4.200.5"     # must match the build host
 ```
+
+**Scope every mise call to `tuist`. Never run a bare `mise install` in CI.** A
+bare install builds *every* tool in `.mise.toml`. If Ruby is pinned there for
+Fastlane — and it usually is, since the same file serves both — mise hands it to
+`ruby-build`, which compiles Ruby from source on the runner, burns several
+minutes, and then **fails**: openssl can't be configured in that environment, so
+the extension doesn't build and `mise install` exits non-zero. Your post-clone
+hook dies before Tuist ever runs.
+
+This is a real failure, not a hypothetical — it killed a build with
+`Running ci_post_clone.sh script failed (exited with code 1)` and no other
+signal, because the useful error is buried four minutes into the script log.
+
+Ruby belongs to the local Fastlane path and is never needed in the cloud. Use
+`mise install tuist` and `mise exec tuist -- …` so CI installs exactly one tool
+while `.mise.toml` stays the single source of the pin.
 
 The trailing existence check matters: without it a failed generation surfaces
 much later as a confusing missing-scheme error from `xcodebuild`.
@@ -248,6 +265,25 @@ Poll `GET /v1/ciBuildRuns/{id}` and read `executionProgress` (`PENDING` →
 `ERRORED`, `CANCELED`, `SKIPPED`). `COMPLETE` alone is not success — always
 check `completionStatus`.
 
+## Reading build logs (you will need this)
+
+When a build fails, `GET /v1/ciBuildRuns/{id}/actions` and its `/issues`
+sub-resource give you almost nothing — typically one line like
+`Running ci_post_clone.sh script failed (exited with code 1)`. The actual error
+is in the log bundle, and getting it is a three-hop walk:
+
+```
+GET /v1/ciBuildRuns/{id}/actions              → action ids
+GET /v1/ciBuildActions/{id}/artifacts         → find fileType == LOG_BUNDLE
+GET <artifact.downloadUrl>                    → a .zip; follow redirects
+```
+
+Unzip it and read `.../ci_post_clone.log`. Scripts that fail slowly bury the
+real error thousands of lines in, so read the **tail**, not the head.
+
+Automate this before you need it — debugging Xcode Cloud blind is miserable, and
+the web UI is not an option on a headless setup.
+
 ## TestFlight from Xcode Cloud vs from Fastlane
 
 An `ARCHIVE` action with `buildDistributionAudience` set will push to TestFlight
@@ -275,6 +311,8 @@ see `testflight-ship` step 4.
 | `ci_post_clone.sh` appears not to run at all | Wrong directory, or not executable | Must be `<project-dir>/ci_scripts/`, and `chmod +x` |
 | Script runs but the shebang is ignored | File isn't executable, so Xcode Cloud invokes it as `zsh <file>` | `chmod +x`, commit the mode bit |
 | `tuist: command not found` in CI | Runners have no Tuist | Install it in `ci_post_clone.sh`; pin it in `.mise.toml` |
+| `Running ci_post_clone.sh script failed (exited with code 1)` with no other detail | Anything in the hook. Read the script log — the real error is often minutes in | Fetch `ci_post_clone.log` from the build's `LOG_BUNDLE` artifact (see below) |
+| Hook fails after ~4 min, log shows `ruby-build` and `OpenSSL library could not be found` | A bare `mise install` tried to compile the Ruby pinned for Fastlane | `mise install tuist` / `mise exec tuist -- …` |
 | Workflow builds a stale project | Workspace was committed instead of generated | Gitignore it and generate in the post-clone hook |
 | `POST /v1/ciProducts` → 403 | Products cannot be created by API | GUI onboarding in Xcode, Account Holder for first enablement |
 | Duplicate build number rejections in ASC | Both Xcode Cloud and a Fastlane lane are uploading | Disable one path for that app |
