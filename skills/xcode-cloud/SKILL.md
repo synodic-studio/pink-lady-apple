@@ -174,20 +174,31 @@ A workflow fires on whichever start conditions it declares. The two that matter:
 - `manualBranchStartCondition` — runs only when something explicitly POSTs a
   build run
 
-**Default to manual for this shop**, for three reasons:
+**Measure before choosing.** The intuition that automatic builds will eat the
+allowance is usually wrong, and it's cheap to check. A measured iOS `ARCHIVE`
+runs about **5.4 minutes**, so a 25-hour month is roughly **280 builds, ~9 per
+day**. Compare that against the repo's actual push rate
+(`git log --since="14 days ago" --date=short --pretty=%ad <branch> | uniq -c`).
+A repo committing a handful of times on its busiest day is nowhere near the
+ceiling, and Xcode Cloud triggers per *push*, not per commit, so the real number
+is lower still.
 
-1. `develop` is the normal working branch and gets pushed constantly. An
-   automatic branch condition turns every routine commit into a cloud build,
-   which burns the monthly compute allowance on work nobody asked to verify.
-2. If the app also has a Fastlane release lane, an automatic archive that
-   distributes to TestFlight races the local lane for build numbers and ASC
-   rejects the duplicate.
-3. Headless-first means builds should be invoked deliberately, not appear in the
-   background.
+Where that's true, **automatic on the working branch is the better default** —
+catching a broken build on push is the entire point of CI, and it costs
+headroom you aren't using.
 
-Manual does not mean clicking anything — triggering stays a one-line API call
-(below), so it's still fully scriptable. You get the same automation with
-determinism about *when*.
+Switch to manual when one of these actually applies:
+
+1. **The app also ships via a Fastlane lane and the cloud workflow distributes
+   to TestFlight.** Two uploaders race for build numbers and ASC rejects the
+   duplicate. This is the one that bites hardest — and note it's really an
+   argument against *distributing* from both, not against building.
+2. **The push rate genuinely approaches the ceiling** — a busy multi-person repo,
+   or a workflow much slower than 5 minutes.
+3. **You want builds to be deliberate events** rather than background activity.
+
+Manual doesn't mean clicking anything — triggering stays a one-line API call
+(below), so it's still fully scriptable, just deterministic about *when*.
 
 Switch an existing automatic workflow to manual by moving the condition:
 
@@ -295,6 +306,13 @@ GET /v1/ciWorkflows/{id}/buildRuns?limit=50
 `finishedDate - startedDate` is the per-build wall time. Treat it as a close
 proxy for billed compute, not as the billed figure itself — Apple doesn't
 publish the exact mapping, so budget with headroom rather than to the minute.
+
+**Measured baseline**: a single-scheme iOS `ARCHIVE` on a Tuist project, with
+`ci_post_clone.sh` installing mise and Tuist and regenerating the workspace,
+runs **~5.4 minutes** end to end (two consecutive successes at 5.3 and 5.4).
+Against a 25-hour month that's ~280 builds, ~9 per day. Use it as a starting
+estimate, then measure your own — a multi-scheme workflow or one with TEST
+actions will be materially slower.
 
 `startReason` is the field worth watching: `GIT_REF_CHANGE` means a push
 triggered it, `MANUAL` means something asked for it deliberately. Summing wall
