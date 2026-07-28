@@ -75,11 +75,24 @@ if [ ! -d "<Scheme>.xcworkspace" ]; then
 fi
 ```
 
-**Install Tuist through mise, not `brew install tuist`.** Brew gives you whatever
-Tuist is current, so CI drifts away from the build host. When a manifest-format
-change lands between Tuist majors, generation breaks in CI while working fine
-locally — which reads as a code problem and isn't. Add the pin next to whatever
-is already in `.mise.toml`:
+**`brew install tuist` cannot work on Xcode Cloud. Use mise.** This is not a
+preference — Homebrew ships Tuist as a **cask**, cask installation calls `sudo`,
+and the runners have no TTY and no passwordless sudo. The build dies with:
+
+```
+==> Installing Cask tuist
+sudo: a terminal is required to read the password; either use the -S option
+      to read from standard input or configure an askpass helper
+sudo: a password is required
+Error: No such file or directory @ rb_file_s_stat - /usr/local/Caskroom
+```
+
+Secondary but real: brew also resolves whatever Tuist is current (it pulled
+`4.202.6` against a host on `4.200.5`), so even where it installs it drifts away
+from the build host, and a manifest-format change between majors then breaks
+generation in CI only — which reads as a code problem and isn't.
+
+Add the pin next to whatever is already in `.mise.toml`:
 
 ```toml
 [tools]
@@ -265,6 +278,34 @@ Poll `GET /v1/ciBuildRuns/{id}` and read `executionProgress` (`PENDING` →
 `ERRORED`, `CANCELED`, `SKIPPED`). `COMPLETE` alone is not success — always
 check `completionStatus`.
 
+## Measuring compute against the monthly allowance
+
+The plan includes a fixed number of compute hours per month (25 on the base
+tier). **There is no API for consumed allowance** — `ciUsages`,
+`ciComputeUsages`, and every similar path 404. Apple surfaces the counter only
+in the ASC web UI, which is useless headless.
+
+What you *can* get is per-build wall time, from attributes on the build run:
+
+```
+GET /v1/ciWorkflows/{id}/buildRuns?limit=50
+→ createdDate, startedDate, finishedDate, startReason, completionStatus
+```
+
+`finishedDate - startedDate` is the per-build wall time. Treat it as a close
+proxy for billed compute, not as the billed figure itself — Apple doesn't
+publish the exact mapping, so budget with headroom rather than to the minute.
+
+`startReason` is the field worth watching: `GIT_REF_CHANGE` means a push
+triggered it, `MANUAL` means something asked for it deliberately. Summing wall
+time grouped by `startReason` tells you how much of the allowance is going to
+builds nobody requested — which is the concrete argument for manual start
+conditions above.
+
+Note that **failed builds still consume the allowance**, and a hook that fails
+slowly is the expensive kind: a bare `mise install` compiling Ruby before dying
+burned ~5 minutes per attempt for no result.
+
 ## Reading build logs (you will need this)
 
 When a build fails, `GET /v1/ciBuildRuns/{id}/actions` and its `/issues`
@@ -311,6 +352,7 @@ see `testflight-ship` step 4.
 | `ci_post_clone.sh` appears not to run at all | Wrong directory, or not executable | Must be `<project-dir>/ci_scripts/`, and `chmod +x` |
 | Script runs but the shebang is ignored | File isn't executable, so Xcode Cloud invokes it as `zsh <file>` | `chmod +x`, commit the mode bit |
 | `tuist: command not found` in CI | Runners have no Tuist | Install it in `ci_post_clone.sh`; pin it in `.mise.toml` |
+| `sudo: a terminal is required to read the password`, then `No such file or directory @ rb_file_s_stat - /usr/local/Caskroom` | `brew install tuist` — Tuist is a cask, casks need sudo, runners have no TTY | Install via mise instead. Applies to any cask, not just Tuist |
 | `Running ci_post_clone.sh script failed (exited with code 1)` with no other detail | Anything in the hook. Read the script log — the real error is often minutes in | Fetch `ci_post_clone.log` from the build's `LOG_BUNDLE` artifact (see below) |
 | Hook fails after ~4 min, log shows `ruby-build` and `OpenSSL library could not be found` | A bare `mise install` tried to compile the Ruby pinned for Fastlane | `mise install tuist` / `mise exec tuist -- …` |
 | Workflow builds a stale project | Workspace was committed instead of generated | Gitignore it and generate in the post-clone hook |
