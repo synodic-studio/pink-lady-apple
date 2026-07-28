@@ -1,8 +1,8 @@
 {
   "name": "pink-lady-apple",
-  "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging",
+  "description": "Apple platform development and release toolchain: Tuist, Swift patterns, Fastlane, TestFlight, Xcode Cloud, debugging",
   "author": {
     "name": "Synodic Studio"
   },
-  "version": "2.1.0"
+  "version": "2.2.0"
 }

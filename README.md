@@ -18,6 +18,7 @@ claude plugins install pink-lady-apple@pink-lady-apple
 - **apple-release** — Fastlane + mise + bundler, iOS TestFlight, macOS notarize, the `prices`/Ruby-version landmines.
 - **testflight-ship** — end-to-end TestFlight upload + internal-tester invitation (the step that keeps getting missed).
 - **debug-builds** — Debug/Release separation with distinct bundle IDs and debug icons.
+- **xcode-cloud** — Apple-hosted CI: `ci_scripts` hooks, the ciWorkflows/ciBuildRuns API, and the Tuist-workspace-is-gitignored collision.
 - **sim-capture** — iOS Simulator screenshots and video via XCUITest.
 
 ## Configuration

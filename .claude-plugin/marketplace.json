@@ -7,8 +7,8 @@
     {
       "name": "pink-lady-apple",
       "source": "./",
-      "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging"
+      "description": "Apple platform development and release toolchain: Tuist, Swift patterns, Fastlane, TestFlight, Xcode Cloud, debugging"
     }
   ],
-  "description": "Apple platform toolchain: iOS/macOS development patterns, Fastlane/TestFlight release automation, simulator capture, and debug builds"
+  "description": "Apple platform toolchain: iOS/macOS development patterns, Tuist project generation, Fastlane/TestFlight release automation, Xcode Cloud CI, simulator capture, and debug builds"
 }

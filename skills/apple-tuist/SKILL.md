@@ -183,6 +183,12 @@ fastlane/test_output/
 If the repo also uses Fastlane, `apple-release` scaffold step 4 adds the
 `!.bundle/config` exception on top of this — apply both.
 
+**If the repo builds on Xcode Cloud, gitignoring the workspace breaks the build**
+unless a `ci_scripts/ci_post_clone.sh` regenerates it after the clone. Xcode
+Cloud has no Tuist and no workspace, so it fails before `xcodebuild` runs. Do
+not "fix" this by committing the workspace. See
+**`pink-lady-apple:xcode-cloud`**.
+
 ## Per-configuration settings
 
 Anything that must differ between Debug and Release goes in `configurations:`,

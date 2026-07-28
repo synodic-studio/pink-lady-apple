@@ -326,7 +326,7 @@ need a human. Apps keep their metadata as a
 ## What this skill does NOT do
 
 - **No screenshot automation templates** — every app's UI test suite is different. Copy the capture approach from a reference app (`CaptureTests` → `/tmp` PNGs, seeded mock data, `-serverURL` launch arg) but don't try to share the lane.
-- **No cross-repo CI** — the org is direct-commit-to-develop with local pre-push hooks. Fastlane lanes run locally on the build machine. There is no GitHub Actions equivalent.
+- **No GitHub Actions** — the org is direct-commit-to-develop with local pre-push hooks, and Fastlane lanes in this skill run locally on the build machine. The one hosted-CI option is **Xcode Cloud**, covered by `pink-lady-apple:xcode-cloud`. Do not run both paths against the same app — two uploaders race for build numbers and ASC rejects the duplicate.
 - **No project generation** — `Project.swift`, targets, schemes, and the Info.plist keys that gate a successful upload belong to **`pink-lady-apple:apple-tuist`**. This skill assumes the project already generates and builds.
 
 ## File layout in the skill
