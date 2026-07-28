@@ -397,21 +397,73 @@ VALID in ASC and reaches nobody — the exact "uploaded but invisible" trap in
 `pink-lady-apple:testflight-ship`. Migrating to Xcode Cloud is not finished until
 that chain runs somewhere.
 
-The good news is that chain is `testflight-ship`'s `scripts/asc.py`, which is
-standalone Python and does not need Fastlane. Run it from
-`ci_scripts/ci_post_xcodebuild.sh` with the ASC key supplied as a **secret
-environment variable** on the workflow:
+**Solve this with group configuration, not with a script.** It is tempting to
+run `testflight-ship`'s `asc.py` from `ci_post_xcodebuild.sh`, but that needs an
+ASC key inside the runner, and **workflow environment variables — including
+secrets — cannot be set through the API.** `environmentVariables` is not an
+attribute of `ciWorkflow` (the API rejects it with
+`PARAMETER_ERROR.INVALID`), so every such design adds a manual Xcode GUI step
+and a private key on Apple's infrastructure.
 
-```sh
-#!/bin/sh
-set -e
-[ "$CI_XCODEBUILD_EXIT_CODE" = "0" ] || exit 0     # only on a successful archive
-printf '%s' "$ASC_KEY_P8" > /tmp/AuthKey.p8        # secret env var on the workflow
-uv tool run --from authlib --with httpx python3 "$CI_PRIMARY_REPOSITORY_PATH/…/asc.py" \
-    auto-notify --app-id "$APP_ID"
-uv tool run --from authlib --with httpx python3 "$CI_PRIMARY_REPOSITORY_PATH/…/asc.py" \
-    ensure-invited --app-id "$APP_ID"
+The configuration fix needs neither. An internal group with
+`hasAccessToAllBuilds: true` receives every new VALID build automatically, from
+any uploader, forever. Set it once and the cloud path needs no credentials at
+all.
+
+**The catch: `hasAccessToAllBuilds` cannot be turned on afterward.** It is
+writable on POST and rejected on PATCH:
+
 ```
+409 ENTITY_ERROR.ATTRIBUTE.NOT_ALLOWED
+The attribute 'hasAccessToAllBuilds' can not be included in a 'UPDATE' operation
+```
+
+If an existing group has it `false`, **create a second group rather than
+deleting the first** — deleting drops testers' install state and forces
+re-invites. Two internal groups coexist happily, and a tester can be in both:
+
+```
+POST /v1/betaGroups
+  attributes: {name, isInternalGroup: true, hasAccessToAllBuilds: true}
+  relationships: {app}
+
+POST /v1/betaTesters
+  attributes: {email, firstName, lastName}
+  relationships: {betaGroups: [<new group>]}
+```
+
+Use `POST /betaTesters` to add the tester, **not** a link to a betaTester id you
+looked up by email. `GET /betaTesters?filter[email]=` returns one record per
+app, and linking the wrong app's record fails with `409 STATE_ERROR`. Posting
+with the group relationship resolves the correct app-scoped record and preserves
+the tester's existing state — a tester already `INSTALLED` stays `INSTALLED`, so
+nobody gets re-invited.
+
+### Enabling distribution
+
+Set `buildDistributionAudience` on the `ARCHIVE` action — `INTERNAL_ONLY` for
+TestFlight internal testing. It's nested inside `actions`, so PATCH the whole
+array back rather than trying to address one action:
+
+```
+GET   /v1/ciWorkflows/{id}                     → read attributes.actions
+      set buildDistributionAudience on the ARCHIVE entry
+PATCH /v1/ciWorkflows/{id}  {"data":{"type":"ciWorkflows","id":…,
+                              "attributes":{"actions":[…]}}}
+```
+
+### Migrating build numbers off Fastlane
+
+Xcode Cloud's run counter starts at 1 for a new product, but TestFlight already
+holds whatever the old Fastlane lane uploaded. If you wire `CFBundleVersion` to
+the cloud build number, the series collides the moment the run counter reaches a
+number already used, and ASC rejects the upload as a duplicate.
+
+Add a fixed offset that clears the legacy high-water mark (`+100` if the old
+series reached 7), and never lower it. And read
+`TUIST_CI_BUILD_NUMBER`, not `CI_BUILD_NUMBER`, in a Tuist manifest — see
+`pink-lady-apple:apple-tuist` for why the plain name silently yields the
+fallback, which is exactly the duplicate-build failure you're trying to avoid.
 
 **Don't delete the Fastlane lanes when you migrate.** Keep them as the escape
 hatch for when Xcode Cloud is degraded or you need to ship without pushing, and
