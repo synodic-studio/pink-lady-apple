@@ -19,6 +19,7 @@ claude plugins install pink-lady-apple@pink-lady-apple
 - **testflight-ship** — end-to-end TestFlight upload + internal-tester invitation (the step that keeps getting missed).
 - **debug-builds** — Debug/Release separation with distinct bundle IDs and debug icons.
 - **xcode-cloud** — Apple-hosted CI: `ci_scripts` hooks, the ciWorkflows/ciBuildRuns API, and the Tuist-workspace-is-gitignored collision.
+- **app-store-listing** — public listing: metadata, screenshots, categories, age rating, the first-version `No data` bug.
 - **sim-capture** — iOS Simulator screenshots and video via XCUITest.
 
 ## Configuration

@@ -1,12 +1,21 @@
-# App Store listing: metadata, screenshots, and the ASC API
+---
+name: app-store-listing
+description: Use when staging or editing an app's public App Store listing — metadata text, screenshots, categories, age rating, content rights, privacy/support URLs, attaching a build to a version, or preparing a version for review. Covers the deliver/upload_to_app_store split needed to work around the first-version "No data" bug, the ASC API recipes for everything deliver can't do, and the irreversible build-expiry trap. Triggers on "fill out the App Store listing", "upload screenshots", "set categories", "age rating", "submit for review", "get it ready for review", "app metadata". This is distinct from TestFlight — for beta distribution see pink-lady-apple:testflight-ship.
+---
 
-How to stage a full App Store listing headlessly (no submit), and the landmines
-that cost time the first time. Learned shipping one app's 1.0 (2026-07-05).
+# App Store Listing
+
+## Scope
+
+TestFlight (`beta`) and the public App Store listing are separate jobs with
+separate failure modes. This skill is the listing: metadata, screenshots,
+categories, age rating, and getting a version to "ready for review". For
+uploading builds to beta testers, see **`pink-lady-apple:testflight-ship`**.
 
 The short version: **`deliver` (`upload_to_app_store`) is reliable for text
 metadata and screenshots, but its category/app-info step throws `No data` on the
-very first version of an app. Set categories, content rights, age rating, and the
-build link via the ASC API instead.** All of it can be staged with
+very first version of an app.** Set categories, content rights, age rating, and
+the build link via the ASC API instead. All of it stages with
 `submit_for_review: false` — getting a listing "ready for review" is fully
 headless; only the final submit and the privacy attestation need a human.
 
@@ -55,6 +64,8 @@ Notes:
 
 ## Screenshots from an XCUITest
 
+Capture mechanics live in **`pink-lady-apple:sim-capture`**. What matters here:
+
 - Capture to a known dir (`/tmp/…`), `XCUIScreen.main.screenshot().pngRepresentation`.
 - **1320×2868** (iPhone 17 Pro Max, 6.9") is accepted and lands in ASC display type
   `APP_IPHONE_67` (Apple folds 6.9" into the 6.7" set). 1290×2796 works too.
@@ -72,8 +83,8 @@ Notes:
 
 ## ASC API recipes (authlib JWT + httpx)
 
-Auth is the same pattern as `scripts/asc.py` (`token()` → `Bearer`, base
-`https://api.appstoreconnect.apple.com/v1`). Key id / issuer from
+Auth is the same pattern as `testflight-ship/scripts/asc.py` (`token()` →
+`Bearer`, base `https://api.appstoreconnect.apple.com/v1`). Key id / issuer from
 `pass show asc-key-id` / `asc-issuer-id`, `.p8` at
 `~/.appstoreconnect/private_keys/AuthKey_<KID>.p8`.
 
@@ -125,8 +136,10 @@ shots  = GET /appScreenshotSets/{setId}/appScreenshots   # attributes.fileName
 DELETE /appScreenshots/{id}   # for every id past the first per fileName
 ```
 
-**Expiring old builds is IRREVERSIBLE — do it by build number, never a lookup.**
+## Expiring old builds is IRREVERSIBLE — do it by build number, never a lookup
+
 Two related traps, learned the hard way shipping one app's 0.1.0:
+
 - **Going backwards in version shadows the new build.** If you drop from 1.0.0 to
   0.1.0, TestFlight groups builds by version string and surfaces the *higher*
   version (1.0.0) as the default, so the tester "still sees the old build" even
@@ -137,11 +150,12 @@ Two related traps, learned the hard way shipping one app's 0.1.0:
   version lookup that can silently fail: an `include=preReleaseVersion` that
   doesn't resolve leaves every build's version as `"?"`, and a `!= "0.1.0"` filter
   then expires EVERYTHING — including the build attached to your editable version.
-  Rules: (1) key off the exact build **numbers** you already know, not a lookup;
-  (2) NEVER expire the build currently attached to the PREPARE_FOR_SUBMISSION
-  version (`GET /appStoreVersions/{vid}/build` first and exclude it); (3) print the
-  kill list and confirm before PATCHing. Recovery if you botch it: you can't
-  un-expire, so upload a fresh build and re-attach it.
+
+Rules: (1) key off the exact build **numbers** you already know, not a lookup;
+(2) NEVER expire the build currently attached to the PREPARE_FOR_SUBMISSION
+version (`GET /appStoreVersions/{vid}/build` first and exclude it); (3) print the
+kill list and confirm before PATCHing. Recovery if you botch it: you can't
+un-expire, so upload a fresh build and re-attach it.
 
 ## What still needs a human (not headless)
 
@@ -168,3 +182,9 @@ to restructure into a branch bundle:
 url: "/foo/privacy/"     # clean nested URL, no leaf-vs-branch collision
 ```
 Build and grep the output for a duplicate-target-URL warning to confirm.
+
+## Related skills
+
+- **`pink-lady-apple:testflight-ship`** — beta distribution, the ASC API helper script, tester invitation.
+- **`pink-lady-apple:apple-release`** — Fastlane plumbing, Ruby pinning, signing via match.
+- **`pink-lady-apple:sim-capture`** — driving the simulator to produce the screenshots.

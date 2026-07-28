@@ -43,19 +43,28 @@ the build fails before `xcodebuild` runs.
 Do **not** fix this by committing the workspace — that abandons the manifest as
 the single source of truth and the checked-in copy goes stale immediately.
 
-Fix it with a post-clone hook that regenerates the workspace:
+Fix it with a post-clone hook that regenerates the workspace. This is the
+canonical version — copy it verbatim and substitute `<project-subdir>` and
+`<Scheme>`. `podcast-pusher` runs exactly this shape.
 
 ```sh
 #!/bin/sh
-set -eu
+set -e
 
-PROJECT_DIR="${CI_PRIMARY_REPOSITORY_PATH:-$(cd ../.. && pwd)}/<project-subdir>"
-cd "$PROJECT_DIR"
+# Xcode Cloud checks the primary repo out at $CI_PRIMARY_REPOSITORY_PATH.
+cd "$CI_PRIMARY_REPOSITORY_PATH/<project-subdir>"
 
+echo "▸ Installing mise…"
 brew install mise               # Homebrew is preinstalled on the runners
 eval "$(mise activate sh)"
-mise install                    # reads .mise.toml so CI matches the build host
-mise exec -- tuist install      # resolve Tuist-managed SPM deps
+
+echo "▸ Installing pinned toolchain (.mise.toml)…"
+mise install
+
+echo "▸ Resolving Tuist-managed SPM dependencies…"
+mise exec -- tuist install
+
+echo "▸ Generating the workspace from Project.swift…"
 mise exec -- tuist generate --no-open
 
 if [ ! -d "<Scheme>.xcworkspace" ]; then
@@ -65,11 +74,25 @@ if [ ! -d "<Scheme>.xcworkspace" ]; then
 fi
 ```
 
-**Pin Tuist in `.mise.toml`.** Without a pin, CI silently drifts to a newer
-Tuist than the build host and generation can change under you.
+**Install Tuist through mise, not `brew install tuist`.** Brew gives you whatever
+Tuist is current, so CI drifts away from the build host. When a manifest-format
+change lands between Tuist majors, generation breaks in CI while working fine
+locally — which reads as a code problem and isn't. Add the pin next to whatever
+is already in `.mise.toml`:
+
+```toml
+[tools]
+ruby  = "3.3.11"
+tuist = "4.200.5"     # must match the build host
+```
 
 The trailing existence check matters: without it a failed generation surfaces
 much later as a confusing missing-scheme error from `xcodebuild`.
+
+**None of this changes local development.** `tuist generate`, `tuist build`, and
+the Fastlane lanes work exactly as before — the hook only runs inside Xcode
+Cloud. The `.mise.toml` pin is the one shared artifact, and it makes local and
+CI agree rather than diverge.
 
 ## ci_scripts rules
 
@@ -112,6 +135,45 @@ GET /v1/ciMacOsVersions
 Reading an existing workflow before authoring a new one is the fastest way to
 get the `actions` and start-condition shapes right — they are fiddly and the
 docs show only one example.
+
+## Start conditions: default to manual
+
+A workflow fires on whichever start conditions it declares. The two that matter:
+
+- `branchStartCondition` — **automatic**, runs on every push to matching branches
+- `manualBranchStartCondition` — runs only when something explicitly POSTs a
+  build run
+
+**Default to manual for this shop**, for three reasons:
+
+1. `develop` is the normal working branch and gets pushed constantly. An
+   automatic branch condition turns every routine commit into a cloud build,
+   which burns the monthly compute allowance on work nobody asked to verify.
+2. If the app also has a Fastlane release lane, an automatic archive that
+   distributes to TestFlight races the local lane for build numbers and ASC
+   rejects the duplicate.
+3. Headless-first means builds should be invoked deliberately, not appear in the
+   background.
+
+Manual does not mean clicking anything — triggering stays a one-line API call
+(below), so it's still fully scriptable. You get the same automation with
+determinism about *when*.
+
+Switch an existing automatic workflow to manual by moving the condition:
+
+```
+PATCH /v1/ciWorkflows/{id}
+{"data":{"type":"ciWorkflows","id":"<id>","attributes":{
+  "branchStartCondition": null,
+  "manualBranchStartCondition": {
+    "source": {"isAllMatch": false,
+               "patterns": [{"pattern": "develop", "isPrefix": false}]}
+  }}}}
+```
+
+Automatic is the right call when you specifically want PR gating — a
+`pullRequestStartCondition` running TEST actions gives real value per push and
+doesn't upload anything.
 
 ## Creating a workflow
 

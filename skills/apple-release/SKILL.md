@@ -310,24 +310,12 @@ When `gh` re-auths and a private GitHub repo exists, flip the
 `MATCH_GIT_URL` env var to the remote URL and `git remote add origin +
 push` the local repo. No Matchfile edits needed.
 
-## App Store listing (metadata + screenshots + submission prep)
-
-TestFlight (`beta`) is separate from staging the public **App Store listing**.
-For "fill out the metadata", "upload screenshots", "get it ready for review", or
-"set categories/age rating" — see **`references/app-store-listing.md`**. The load-
-bearing gotcha: `upload_to_app_store` throws a bare `No data` on the categories
-step of a **first** app version, so text metadata and screenshots go through
-`deliver` (split into two lanes) while categories, content rights, age rating, and
-the build link go through the ASC API directly. A full listing can be staged with
-`submit_for_review: false`; only the final submit and the App Privacy attestation
-need a human. Apps keep their metadata as a
-`fastlane/metadata/en-US/` deliver structure with a `push_metadata` lane.
-
 ## What this skill does NOT do
 
 - **No screenshot automation templates** — every app's UI test suite is different. Copy the capture approach from a reference app (`CaptureTests` → `/tmp` PNGs, seeded mock data, `-serverURL` launch arg) but don't try to share the lane.
 - **No GitHub Actions** — the org is direct-commit-to-develop with local pre-push hooks, and Fastlane lanes in this skill run locally on the build machine. The one hosted-CI option is **Xcode Cloud**, covered by `pink-lady-apple:xcode-cloud`. Do not run both paths against the same app — two uploaders race for build numbers and ASC rejects the duplicate.
 - **No project generation** — `Project.swift`, targets, schemes, and the Info.plist keys that gate a successful upload belong to **`pink-lady-apple:apple-tuist`**. This skill assumes the project already generates and builds.
+- **No App Store listing** — metadata, screenshots, categories, age rating, and getting a version submit-ready are **`pink-lady-apple:app-store-listing`**. TestFlight and the public listing are separate jobs with separate failure modes.
 
 ## File layout in the skill
 
@@ -343,6 +331,5 @@ skills/apple-release/
 │   └── Fastfile-macos.tmpl           (release + deploy + ship lanes)
 └── references/
     ├── fastlane-history.md           (the prices bug, Ruby cliff, full sources)
-    ├── altool-status.md              (still supported for App Store, deprecated for notarization only)
-    └── app-store-listing.md          (metadata/screenshots/ASC-API; the first-version "No data" bug)
+    └── altool-status.md              (still supported for App Store, deprecated for notarization only)
 ```
