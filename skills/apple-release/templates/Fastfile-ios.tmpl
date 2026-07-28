@@ -10,7 +10,8 @@
 #
 # Prerequisites (should already be true in any repo):
 #   - Tuist-generated workspace
-#   - ExportOptionsAppStore.plist at repo root (automatic signing)
+#   - fastlane/Matchfile pointing at the shared cert repo (see apple-release)
+#   - MATCH_PASSWORD exported — the `ship` wrapper does this from pass
 #   - ASC API key at ~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8
 
 default_platform(:ios)
@@ -39,6 +40,14 @@ platform :ios do
     # matches whatever's currently committed.
     sh("cd .. && tuist generate --no-open")
 
+    # Signing is match, NOT automatic. Headless mosh/ssh shells have auid=-1
+    # and the Security framework silently refuses to read keychain prefs
+    # without a PAM audit session, so Xcode's automatic cert lookup fails
+    # with no useful error. match imports the shared team cert on demand and
+    # passes --keychain explicitly to codesign.
+    ensure_asc_key_json          # Matchfile needs a key file path, not a Ruby object
+    match(type: "appstore")
+
     build_app(
       workspace: "WORKSPACE",
       scheme: "SCHEME",
@@ -49,6 +58,12 @@ platform :ios do
       output_name: "SCHEME.ipa",
       include_bitcode: false,
       include_symbols: true,
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          "APP_IDENTIFIER" => "match AppStore APP_IDENTIFIER",
+        },
+      },
     )
 
     api_key = app_store_connect_api_key(
@@ -79,10 +94,16 @@ platform :ios do
     #      individualTesters relationship → state flips to INVITED and
     #      TestFlight delivers the push.
     # Both bugs are documented in pink-lady-apple:testflight-ship.
-    # Source-repo path, not the plugin cache — cache paths are hash-pinned
-    # and break on every plugin update.
+    #
+    # Point ASC_SCRIPT at the asc.py in your CHECKOUT of pink-lady-apple, not
+    # at the plugin cache — cache paths are hash-pinned and break on every
+    # plugin update. File.expand_path does not expand shell variables, so this
+    # reads the env var explicitly and fails loudly if it is unset.
     asc_script = File.expand_path(
-      "${CLAUDE_PLUGIN_ROOT}/skills/testflight-ship/scripts/asc.py",
+      ENV.fetch("ASC_SCRIPT") do
+        UI.user_error!("ASC_SCRIPT is unset — point it at " \
+                       "<checkout>/skills/testflight-ship/scripts/asc.py")
+      end,
     )
     sh("uv tool run --from authlib --with httpx python3 #{asc_script} auto-notify --app-id APP_ID")
     # REQUIRED: link the build to the internal group (auto-resolved) and verify it

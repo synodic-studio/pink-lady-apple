@@ -13,7 +13,8 @@ claude plugins install pink-lady-apple@pink-lady-apple
 
 ## Skills
 
-- **apple-platform-dev** — Swift/Metal/Core Data architecture, Tuist conventions, ASC API patterns.
+- **apple-platform-dev** — Swift/Metal/Core Data architecture, MVVM+Manager, concurrency.
+- **apple-tuist** — `Project.swift` authoring, `tuist generate`, and the two silent failures (inert `INFOPLIST_KEY_*`, unbundled `.xcassets`).
 - **apple-release** — Fastlane + mise + bundler, iOS TestFlight, macOS notarize, the `prices`/Ruby-version landmines.
 - **testflight-ship** — end-to-end TestFlight upload + internal-tester invitation (the step that keeps getting missed).
 - **debug-builds** — Debug/Release separation with distinct bundle IDs and debug icons.

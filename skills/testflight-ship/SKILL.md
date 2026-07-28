@@ -33,7 +33,8 @@ If this is your second/third/fourth build to an app that already exists, skip to
 ## Companion skills
 
 - **`pink-lady-apple:apple-release`** — broader Fastlane plumbing: Ruby pinning, `prices` relationship bug, `xcrun altool` fallback, macOS notarization. Read that first if setting up a new repo's release tooling.
-- **`pink-lady-apple:apple-platform-dev`** — Tuist/SwiftUI conventions.
+- **`pink-lady-apple:apple-tuist`** — `Project.swift`, the Info.plist keys and `resources:` entry that gate a successful upload.
+- **`pink-lady-apple:apple-platform-dev`** — Swift architecture, concurrency, Metal, Core Data.
 - **`pink-lady-apple:debug-builds`** — Debug/Release separation with distinct bundle IDs.
 
 ## Environment (the user's setup)
@@ -106,31 +107,22 @@ uv tool run --from authlib --with httpx python3 scripts/asc.py find-app \
 
 ## Step 2 — Info.plist must-haves
 
-Bake these into `Project.swift` (Tuist) so they survive regeneration and every future build passes validation. Don't rely on fastlane flags or post-upload API patches.
+Three Info.plist keys and one resource declaration must be baked into
+`Project.swift` (Tuist) so they survive regeneration and every future build
+passes validation. Don't rely on fastlane flags or post-upload API patches.
 
-```swift
-.target(
-    name: "MyApp",
-    bundleId: "com.example.MyApp",
-    infoPlist: .extendingDefault(with: [
-        "CFBundleDisplayName": "MyApp",
-        "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
-        "CFBundleIconName": "AppIcon",                     // ← required for iOS 11+
-        "ITSAppUsesNonExemptEncryption": false,             // ← export compliance
-        "UILaunchScreen": .dictionary([:]),
-        // ...usage descriptions, etc.
-    ]),
-    sources: ["MyApp/**"],
-    resources: ["MyApp/Assets.xcassets"],                   // ← explicit, glob won't grab it
-    entitlements: .file(path: "MyApp/MyApp.entitlements"),
-)
-```
+**`pink-lady-apple:apple-tuist` is the authority on all four** — it carries the
+manifest snippet, the exact validation errors each one prevents, and why the
+`.xcassets` entry has to be in `resources:` rather than the `sources:` glob. In
+short:
 
-### Why each one matters
+- `CFBundleIconName: "AppIcon"`
+- `ITSAppUsesNonExemptEncryption: false`
+- `CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"`
+- `resources:` must name the target's `Assets.xcassets` explicitly
 
-- **`CFBundleIconName: AppIcon`** — altool rejects builds without this for iOS 11+ because apps must declare their asset-catalog icon name. Error if missing: `Missing Info.plist value. A value for the Info.plist key 'CFBundleIconName' is missing`.
-- **`ITSAppUsesNonExemptEncryption: false`** — declares export compliance at build time. Without it, every new build lands in ASC "missing compliance" and can't be distributed until you PATCH the build record via API. Setting it to `false` is correct for any app that only uses OS-provided encryption (HTTPS, Keychain, CryptoKit primitives) — exempt under BIS 740.17(a)(5)(ii)(A). the user's apps should always be `false` by default.
-- **`resources: ["MyApp/Assets.xcassets"]`** — Tuist's `sources:` glob doesn't pick up `.xcassets` bundles. If you forget this, the build succeeds but altool fails with `Missing required icon file. The bundle does not contain an app icon for iPhone / iPod Touch of exactly '120x120' pixels`.
+If an upload is rejected for a missing icon, a missing `CFBundleIconName`, or
+missing compliance, that skill is where the fix is.
 
 ### Asset catalog
 
@@ -169,6 +161,9 @@ desc "Build MyApp and upload to TestFlight (internal only)"
 lane :beta_myapp do
   sh("cd .. && tuist generate --no-open")
 
+  ensure_asc_key_json          # see apple-release — match needs a key file path
+  match(type: "appstore")
+
   build_app(
     workspace: "ParentProject.xcworkspace",
     scheme: "MyApp",
@@ -179,9 +174,11 @@ lane :beta_myapp do
     output_name: "MyApp.ipa",
     include_bitcode: false,
     include_symbols: true,
-    xcargs: "-allowProvisioningUpdates",
     export_options: {
-      signingStyle: "automatic",
+      signingStyle: "manual",
+      provisioningProfiles: {
+        "com.example.MyApp" => "match AppStore com.example.MyApp",
+      },
     },
   )
 
@@ -225,8 +222,9 @@ This takes `max(TestFlight latest, local)` so it's safe whether local is ahead o
 
 ### Why the explicit flags matter
 
-- **`xcargs: "-allowProvisioningUpdates"`** — tells Xcode to regenerate the provisioning profile when capabilities change. Without it, you hit `Provisioning profile "iOS Team Provisioning Profile: *" doesn't include the <Capability> capability` even after you've enabled the capability on the bundle ID record. The wildcard profile is cached and won't update on its own.
-- **`export_options: { signingStyle: "automatic" }`** — lets the export step (archive → IPA) use automatic signing. Without it, `exportArchive No profiles for 'com.example.MyApp' were found` because a distribution profile doesn't exist yet.
+- **`match(type: "appstore")` before `build_app`** — populates the keychain with the shared team cert and fetches (or generates) a profile per bundle ID. This replaced automatic signing: headless mosh/ssh shells have `auid=-1`, and the Security framework refuses to read keychain prefs without a PAM audit session, so Xcode's automatic cert lookup fails **silently**. Do not reintroduce `signingStyle: "automatic"` or `-allowProvisioningUpdates` — see `pink-lady-apple:apple-release` for the full rationale.
+- **`export_options: { signingStyle: "manual", provisioningProfiles: {...} }`** — the export step needs the match-generated profile named explicitly. The name is always `match AppStore <bundle-id>`. Without it, `exportArchive No profiles for 'com.example.MyApp' were found`.
+- **Capability changes need a profile refresh** — when you enable a new capability on the bundle ID record, the existing match profile doesn't include it. Re-run `match(type: "appstore")` in non-readonly mode so it regenerates, otherwise you hit `Provisioning profile ... doesn't include the <Capability> capability`.
 - **`app_identifier:`** in `upload_to_testflight` — required when the workspace has multiple apps, otherwise fastlane guesses and uploads to the wrong one.
 
 Run it:
@@ -436,10 +434,10 @@ Steps 4c and 4d are first-build-only. If you're about to run them for a second b
 | Symptom | Cause | Fix |
 |---|---|---|
 | `POST /apps 403 FORBIDDEN_ERROR` | Apple forbids app creation via API keys | Have user create in ASC web UI (step 1c) |
-| `Provisioning profile "iOS Team Provisioning Profile: *" doesn't include the <X> capability` | Cached wildcard profile lacks new capability | `rm ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision` + `-allowProvisioningUpdates` |
-| `exportArchive No profiles for '<bundle-id>' were found` | No distribution profile exists yet | Add `export_options: { signingStyle: "automatic" }` to `build_app` |
-| `Missing required icon file … 120x120` | `.xcassets` not in Tuist `resources:` | Add `resources: ["Target/Assets.xcassets"]` |
-| `Missing Info.plist value … CFBundleIconName` | Asset-catalog-only icons need this key for iOS 11+ | Add `"CFBundleIconName": "AppIcon"` to infoPlist |
+| `Provisioning profile … doesn't include the <X> capability` | The match profile predates the capability you just enabled on the bundle ID | Re-run `match(type: "appstore")` non-readonly so it regenerates the profile |
+| `exportArchive No profiles for '<bundle-id>' were found` | `build_app` wasn't told which match profile to use | `export_options: { signingStyle: "manual", provisioningProfiles: { "<bundle-id>" => "match AppStore <bundle-id>" } }` |
+| `Missing required icon file … 120x120` | `.xcassets` not in Tuist `resources:` | Add `resources: ["Target/Assets.xcassets"]` — see `pink-lady-apple:apple-tuist` |
+| `Missing Info.plist value … CFBundleIconName` | Asset-catalog-only icons need this key for iOS 11+ | Add `"CFBundleIconName": "AppIcon"` to infoPlist — see `pink-lady-apple:apple-tuist` |
 | `Invalid entitlement for core nfc framework … NDEF is disallowed` | iOS 18.2+ SDK deprecated NDEF in readersession.formats | Remove `<string>NDEF</string>` — `TAG` covers it |
 | `Build is not in an externally assignable state` | Missing export compliance declaration | Bake `ITSAppUsesNonExemptEncryption: false` into Info.plist, or PATCH build record |
 | Tester add returns `409 STATE_ERROR` | Tried to reuse a tester from another app | Create a new tester record scoped to this app |

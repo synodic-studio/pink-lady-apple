@@ -77,7 +77,7 @@ Both share the infrastructure files (`.mise.toml`, `Gemfile`, `.bundle/config`, 
 
 ### iOS — TestFlight upload
 
-Uses `build_app` + `upload_to_testflight`. Single `beta` lane. Automatic signing via `ExportOptionsAppStore.plist` in the repo root. See `templates/Fastfile-ios.tmpl`.
+Uses `match` + `build_app` + `upload_to_testflight`. Single `beta` lane. Signing is manual against the match-generated profile — see "Signing" below; automatic signing does not work headlessly. `templates/Fastfile-ios.tmpl` is the reference implementation.
 
 Always includes a `beta_probe` lane that calls `latest_testflight_build_number` against ASC — runs in under 10 seconds, exercises the exact Spaceship code path that was broken in 2.205.1, so it's a perfect canary before a real upload.
 
@@ -327,6 +327,7 @@ need a human. Apps keep their metadata as a
 
 - **No screenshot automation templates** — every app's UI test suite is different. Copy the capture approach from a reference app (`CaptureTests` → `/tmp` PNGs, seeded mock data, `-serverURL` launch arg) but don't try to share the lane.
 - **No cross-repo CI** — the org is direct-commit-to-develop with local pre-push hooks. Fastlane lanes run locally on the build machine. There is no GitHub Actions equivalent.
+- **No project generation** — `Project.swift`, targets, schemes, and the Info.plist keys that gate a successful upload belong to **`pink-lady-apple:apple-tuist`**. This skill assumes the project already generates and builds.
 
 ## File layout in the skill
 

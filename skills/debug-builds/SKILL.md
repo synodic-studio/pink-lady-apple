@@ -79,16 +79,10 @@ Write `Contents.json` alongside it:
 ```
 
 ### Display Name in Tuist
-Tuist's `.extendingDefault(with:)` generates an explicit Info.plist, so `INFOPLIST_KEY_*` build settings are **silently ignored**. To use a build-setting-driven value, reference it in the infoPlist dict:
-
-```swift
-infoPlist: .extendingDefault(with: [
-    "CFBundleDisplayName": "$(INFOPLIST_KEY_CFBundleDisplayName)",
-    // ...
-]),
-```
-
-Since Debug and Release use the same display name, just hardcode it.
+Since Debug and Release use the same display name, hardcode it in the `infoPlist`
+dict. Do not try to drive it from an `INFOPLIST_KEY_*` build setting — Tuist
+generates an explicit Info.plist, which makes those settings silently inert.
+That gotcha is documented in **`pink-lady-apple:apple-tuist`**.
 
 ### Entitlements
 - Use separate `AppNameDebug.entitlements` for Debug
