@@ -132,6 +132,42 @@ infoPlist: .extendingDefault(with: [
 For a value that doesn't vary per configuration, skip the indirection and
 hardcode it in the dict.
 
+### Manifests only see `TUIST_`-prefixed environment variables
+
+`Project.swift` runs in a sandbox that filters the environment. A manifest
+reading a plain variable gets `nil` and silently takes its fallback:
+
+```swift
+// ❌ always nil, even when CI_BUILD_NUMBER is exported and visible to the shell
+ProcessInfo.processInfo.environment["CI_BUILD_NUMBER"]
+
+// ✅ visible
+ProcessInfo.processInfo.environment["TUIST_CI_BUILD_NUMBER"]
+```
+
+Re-export under the prefix at the call site:
+
+```sh
+export TUIST_CI_BUILD_NUMBER="${CI_BUILD_NUMBER:?unset}"
+tuist generate --no-open
+```
+
+This is nastier than it looks, because the usual pattern is
+`env["X"] ?? "someDefault"` — so it doesn't error, it quietly produces the
+default. A `CFBundleVersion` wired this way emits the same build number on
+every CI run, and ASC rejects the second upload as a duplicate with an error
+that points at App Store Connect rather than at your manifest.
+
+Verify it rather than trusting it — pass a distinctive value and read the
+generated plist back:
+
+```sh
+TUIST_CI_BUILD_NUMBER=42 tuist generate --no-open
+python3 -c "import plistlib;print(plistlib.load(open('Derived/InfoPlists/<App>-Info.plist','rb'))['CFBundleVersion'])"
+```
+
+Don't test with a value equal to the fallback, or you can't tell the two apart.
+
 ### `.xcassets` is not picked up by the `sources:` glob
 
 Tuist's `sources:` only matches compilable sources. An asset catalog must be
