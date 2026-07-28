@@ -1,18 +1,15 @@
 # pink-lady-apple
 
 Apple platform toolchain for Claude Code — a single-plugin marketplace exposing
-**`pink-lady`**: iOS/macOS development patterns, Fastlane/TestFlight release
+**`pink-lady-apple`**: iOS/macOS development patterns, Fastlane/TestFlight release
 automation, simulator capture, and debug-build workflows.
 
 ## Install
 
 ```bash
 claude plugins marketplace add synodic-studio/pink-lady-apple
-claude plugins install pink-lady@pink-lady
+claude plugins install pink-lady-apple@pink-lady-apple
 ```
-
-The repo is `pink-lady-apple`; the marketplace and the plugin inside it are both
-named `pink-lady`. That is why the `add` path and the `install` argument differ.
 
 ## Skills
 

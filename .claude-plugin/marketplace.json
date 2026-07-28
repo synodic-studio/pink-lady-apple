@@ -1,11 +1,11 @@
 {
-  "name": "pink-lady",
+  "name": "pink-lady-apple",
   "owner": {
     "name": "Synodic Studio"
   },
   "plugins": [
     {
-      "name": "pink-lady",
+      "name": "pink-lady-apple",
       "source": "./",
       "description": "Apple platform development and release toolchain: iOS/macOS patterns, Fastlane, TestFlight, debugging"
     }

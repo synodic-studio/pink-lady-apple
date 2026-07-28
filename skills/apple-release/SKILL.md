@@ -14,14 +14,14 @@ The big landmines this skill prevents:
 1. **The `prices` relationship bug** — fastlane ≤ 2.212.1 crashes on any ASC App lookup with `'prices' is not a valid relationship name`. Apple removed the relationship from the API in March 2023; old Spaceship code had it hard-coded. One app hit this shipping 2026-04-10. Fix: bump to `>= 2.212.2`. Full writeup in `references/fastlane-history.md`.
 2. **The Ruby 2.6 / 2.7 cliff** — system macOS Ruby is 2.6. Fastlane after `2.226.0` requires Ruby `>= 2.7`. So on system Ruby you can only use `2.212.2 ≤ fastlane ≤ 2.226.0`. With modern Ruby (via mise) you can use current stable.
 3. **Cache / Spaceship stale state** — when fastlane's build-lookup bombs during upload, the IPA is usually already signed on disk. `xcrun altool --upload-app` is the escape hatch — still fully supported by Apple for App Store uploads (only notarization subcommands were deprecated per TN3147).
-4. **The "uploaded but invisible" trap** — fastlane reports success and the build goes VALID in ASC, but no internal beta group exists, so the build never reaches the tester's phone. **`fastlane beta` succeeding is NOT shipping.** The `pink-lady:testflight-ship` skill is the required follow-up — see "After every successful beta upload" below. One app's build 1 (2026-05-03) hit this exact failure: upload reported `🎉 finished successfully`, ASC said VALID, but the tester's phone showed nothing because no `InternalTesters` group existed yet.
+4. **The "uploaded but invisible" trap** — fastlane reports success and the build goes VALID in ASC, but no internal beta group exists, so the build never reaches the tester's phone. **`fastlane beta` succeeding is NOT shipping.** The `pink-lady-apple:testflight-ship` skill is the required follow-up — see "After every successful beta upload" below. One app's build 1 (2026-05-03) hit this exact failure: upload reported `🎉 finished successfully`, ASC said VALID, but the tester's phone showed nothing because no `InternalTesters` group existed yet.
 5. **Defensive post-upload chain: auto-notify + add-build-to-group + ensure-invited** — `templates/Fastfile-ios.tmpl` chains all three (each `--app-id APP_ID`, no hard-coded group id) after `upload_to_testflight`. The load-bearing one is **`add-build-to-group`**: an internal group with `hasAccessToAllBuilds=false` does NOT receive new builds automatically, so without an explicit link the build goes VALID in ASC but never reaches a single device. This was silently missing from the template for months and is the #1 cause of "you didn't add me again" — the build uploads, the lane reports success, and the tester stays on an old build. `add-build-to-group` now POSTs the link, **verifies it by reading the group's build list** (Apple disallows `GET /builds/{id}/betaGroups`, so verify via the group, not the build), **retries** for ~36s while ASC associates, and **exits non-zero if it never lands** so the lane fails loudly instead of silently. All three commands are idempotent and auto-resolve the internal group from `--app-id`. If a tester reports nothing, run `group-builds --group-id <id>` first — if the build isn't listed, the link failed; re-run `add-build-to-group --app-id <APP_ID>`.
 
 ## After every successful beta upload — REQUIRED
 
 Treat `fastlane beta` (or `ship`) finishing successfully as a midpoint. The four mandatory follow-ups are:
 
-1. **Run `pink-lady:testflight-ship` step 4** — first build per app needs 4c (create internal group) + 4d (add tester). Subsequent builds just need 4f (verify with `group-builds`, `list-testers`). The `list-groups --app-id <id>` check is the canary: if only an external group exists (`internal=False`), create the internal group.
+1. **Run `pink-lady-apple:testflight-ship` step 4** — first build per app needs 4c (create internal group) + 4d (add tester). Subsequent builds just need 4f (verify with `group-builds`, `list-testers`). The `list-groups --app-id <id>` check is the canary: if only an external group exists (`internal=False`), create the internal group.
 2. **Bump the build number** — `mise exec -- bundle exec fastlane bump_build`. ASC rejects duplicates.
 3. **Commit** the bump, `Gemfile.lock`, and any Project.swift / Fastfile changes.
 4. **Push** to the working branch.
@@ -88,7 +88,7 @@ Uses `build_mac_app` + `notarize`. Typically followed by a project-specific `dep
 ## When to use this skill
 
 - **"Set up fastlane in <repo>"** — stamp the templates, run `mise install`, run `bundle install`, run `fastlane beta_probe` to verify. Follow the "Scaffold procedure" below.
-- **"Ship <iOS app> to TestFlight"** — cd to the repo, run `mise exec -- bundle exec fastlane beta`, THEN invoke `pink-lady:testflight-ship` step 4 (group + tester setup), THEN bump+commit+push. Skipping the testflight-ship hand-off is the most common iOS shipping bug. If `fastlane beta` fails on Spaceship, check the troubleshooting section below.
+- **"Ship <iOS app> to TestFlight"** — cd to the repo, run `mise exec -- bundle exec fastlane beta`, THEN invoke `pink-lady-apple:testflight-ship` step 4 (group + tester setup), THEN bump+commit+push. Skipping the testflight-ship hand-off is the most common iOS shipping bug. If `fastlane beta` fails on Spaceship, check the troubleshooting section below.
 - **"Ship <macOS app>"** — cd to the repo, run `mise exec -- bundle exec fastlane mac ship` (or whatever the repo's combined lane is called).
 - **Error message contains `prices`**, or `latest_testflight_build_number` fails, or `upload_to_testflight` crashes during app lookup — see "The `prices` bug" below. Almost always fixed by bumping fastlane and running `bundle update fastlane`.
 - **Error message contains `required_ruby_version`** or `unsupported Ruby version` — the repo is trying to load a fastlane version that needs newer Ruby than the current interpreter. Either upgrade Ruby via mise or cap fastlane.
@@ -224,14 +224,14 @@ Never claim "uploaded successfully" in a status report until ASC shows `VALID` s
 
 The plugin cache is comparing against the CACHED marketplace metadata, not the live remote. Refresh the marketplace first:
 ```bash
-claude plugins marketplace update pink-lady
-claude plugins update pink-lady@pink-lady
+claude plugins marketplace update pink-lady-apple
+claude plugins update pink-lady-apple@pink-lady-apple
 ```
 
 If that STILL doesn't pick up the new version, force-reinstall:
 ```bash
-claude plugins uninstall pink-lady@pink-lady
-claude plugins install pink-lady@pink-lady
+claude plugins uninstall pink-lady-apple@pink-lady-apple
+claude plugins install pink-lady-apple@pink-lady-apple
 ```
 
 ## The `prices` bug — summary
