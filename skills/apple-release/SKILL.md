@@ -234,6 +234,21 @@ claude plugins uninstall pink-lady-apple@pink-lady-apple
 claude plugins install pink-lady-apple@pink-lady-apple
 ```
 
+### Still seeing a `pink-lady` marketplace or plugin
+
+The repo, marketplace, and plugin were all renamed `pink-lady` → `pink-lady-apple`
+at v2.0.0. `update` cannot cross that rename — the old names point at a repo path
+that no longer resolves. Drop the old registration and re-add:
+```bash
+claude plugins uninstall pink-lady@pink-lady
+claude plugins marketplace remove pink-lady
+claude plugins marketplace add synodic-studio/pink-lady-apple
+claude plugins install pink-lady-apple@pink-lady-apple
+```
+
+Skill references also moved namespace: `pink-lady:testflight-ship` is now
+`pink-lady-apple:testflight-ship`.
+
 ## The `prices` bug — summary
 
 Full writeup in `references/fastlane-history.md`. One-sentence version: Apple removed the `prices` relationship from the `apps` resource in the App Store Connect API during the March 2023 pricing overhaul; fastlane's Spaceship had it hard-coded in `ESSENTIAL_INCLUDES`; [PR #21187](https://github.com/fastlane/fastlane/pull/21187) removed it in fastlane 2.212.2.
