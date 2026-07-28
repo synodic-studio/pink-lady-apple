@@ -55,8 +55,9 @@ set -e
 cd "$CI_PRIMARY_REPOSITORY_PATH/<project-subdir>"
 
 echo "▸ Installing mise…"
-brew install mise               # Homebrew is preinstalled on the runners
-eval "$(mise activate sh)"
+# Use mise's own installer, not `brew install mise` — brew costs ~50s here,
+# almost all of it refreshing formula metadata the build never uses.
+curl -fsSL https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh
 
 echo "▸ Installing pinned Tuist…"
 # `mise install tuist`, never a bare `mise install` — see the warning below.
@@ -123,6 +124,35 @@ much later as a confusing missing-scheme error from `xcodebuild`.
 the Fastlane lanes work exactly as before — the hook only runs inside Xcode
 Cloud. The `.mise.toml` pin is the one shared artifact, and it makes local and
 CI agree rather than diverge.
+
+### Where the time actually goes
+
+Measured on a real build, post-clone hook totalling 148s of a 324s build:
+
+| step | cost |
+|---|---|
+| install mise (via `brew`) | 50.8s |
+| `mise install tuist` | 3.7s |
+| `tuist install` (SPM resolution) | 83.5s |
+| `tuist generate` | **9.7s** |
+
+**Generation is not the expensive part** — it's under ten seconds. This matters
+because it kills the two "optimizations" people reach for first:
+
+- **Committing the generated `.xcodeproj`/`.xcworkspace`** saves the ~10s of
+  generation and the mise install, but *not* the 83.5s of SPM resolution —
+  `xcodebuild` still has to resolve packages either way. So you trade the entire
+  point of Tuist (manifest as single source of truth) plus permanent staleness
+  and merge-conflict risk, for well under a minute.
+- **Having CI call out to a self-hosted generation service** saves even less than
+  committing — you still resolve SPM, and now you've added a network round trip,
+  auth, and a machine that must be up for any build to succeed. It converts a
+  self-contained 10-second local step into a distributed-systems dependency.
+
+The real win is the boring one: don't use Homebrew. Swapping `brew install mise`
+for the curl installer removes ~50s, about 15% of total build time, and changes
+nothing architecturally. If you need more after that, look at SPM resolution —
+fewer dependencies, or Xcode Cloud's dependency caching — not at generation.
 
 ## ci_scripts rules
 
@@ -348,16 +378,50 @@ the web UI is not an option on a headless setup.
 An `ARCHIVE` action with `buildDistributionAudience` set will push to TestFlight
 directly. Leaving it null means the workflow archives and stops.
 
-These two paths do the same job and **should not both be live for one app** —
+These two paths do the same job and **should not both distribute for one app** —
 two uploads race for build numbers and you get duplicate-build rejections in
-ASC. Pick one per app:
+ASC. Both may *build*; only one may upload.
 
-- **Fastlane (`pink-lady-apple:apple-release`)** — signing via match, full
-  control, runs on the build host, and the post-upload group/tester chain from
-  `pink-lady-apple:testflight-ship` is already wired into the lane.
-- **Xcode Cloud** — no local build host needed, but signing is Apple-managed and
-  the tester-invitation follow-ups in `testflight-ship` still have to happen
-  separately. Xcode Cloud archiving does **not** invite anyone.
+**Xcode Cloud is the better default for iOS TestFlight**, because it sidesteps
+the most fragile part of the local path. A headless Fastlane build needs the
+login keychain unlocked (`security unlock-keychain`) and a valid signing
+identity reachable from a shell that has no GUI session — the recurring
+`auid=-1` / Background-vs-Aqua problem. Xcode Cloud has Apple-managed signing and
+no keychain at all, so an entire class of "works interactively, fails headless"
+failures disappears.
+
+**What Xcode Cloud does not do: invite testers.** An `ARCHIVE` with
+`buildDistributionAudience` set uploads the build and stops there. If the app's
+internal group doesn't already have `hasAccessToAllBuilds: true`, the build goes
+VALID in ASC and reaches nobody — the exact "uploaded but invisible" trap in
+`pink-lady-apple:testflight-ship`. Migrating to Xcode Cloud is not finished until
+that chain runs somewhere.
+
+The good news is that chain is `testflight-ship`'s `scripts/asc.py`, which is
+standalone Python and does not need Fastlane. Run it from
+`ci_scripts/ci_post_xcodebuild.sh` with the ASC key supplied as a **secret
+environment variable** on the workflow:
+
+```sh
+#!/bin/sh
+set -e
+[ "$CI_XCODEBUILD_EXIT_CODE" = "0" ] || exit 0     # only on a successful archive
+printf '%s' "$ASC_KEY_P8" > /tmp/AuthKey.p8        # secret env var on the workflow
+uv tool run --from authlib --with httpx python3 "$CI_PRIMARY_REPOSITORY_PATH/…/asc.py" \
+    auto-notify --app-id "$APP_ID"
+uv tool run --from authlib --with httpx python3 "$CI_PRIMARY_REPOSITORY_PATH/…/asc.py" \
+    ensure-invited --app-id "$APP_ID"
+```
+
+**Don't delete the Fastlane lanes when you migrate.** Keep them as the escape
+hatch for when Xcode Cloud is degraded or you need to ship without pushing, and
+keep `beta_probe` — it's a ten-second ASC health check that costs nothing. What
+you should remove is the *duplicate distribution*: let exactly one path call
+`upload_to_testflight`.
+
+Fastlane also still owns work Xcode Cloud doesn't do at all: macOS Developer ID
+notarization and custom distribution, and the App Store listing (see
+`pink-lady-apple:app-store-listing`).
 
 Whichever you choose, "the build reached the tester's phone" is still the bar —
 see `testflight-ship` step 4.
