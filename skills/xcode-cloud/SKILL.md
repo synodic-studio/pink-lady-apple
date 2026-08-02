@@ -382,17 +382,17 @@ These two paths do the same job and **should not both distribute for one app** �
 two uploads race for build numbers and you get duplicate-build rejections in
 ASC. Both may *build*; only one may upload.
 
-**Xcode Cloud is the more attractive default for iOS TestFlight — if uploading
-works on your team.** It sidesteps the most fragile part of the local path: a
-headless Fastlane build needs the login keychain unlocked
-(`security unlock-keychain`) and a signing identity reachable from a shell with
-no GUI session — the recurring `auid=-1` / Background-vs-Aqua problem. Xcode
-Cloud has Apple-managed signing and no keychain, so an entire class of "works
-interactively, fails headless" failures disappears.
+**Xcode Cloud is the better default for iOS TestFlight.** It sidesteps the most
+fragile part of the local path: a headless Fastlane build needs the login
+keychain unlocked (`security unlock-keychain`) and a signing identity reachable
+from a shell with no GUI session — the recurring `auid=-1` / Background-vs-Aqua
+problem. Xcode Cloud has Apple-managed signing and no keychain, so an entire
+class of "works interactively, fails headless" failures disappears.
 
-Verify the upload half before you rely on it, though — see the ASC
-authentication failure below. A sound plan is **archive in the cloud, upload from
-Fastlane** until you've seen a cloud upload actually reach TestFlight.
+Still, **archiving working proves nothing about uploading** — the two fail
+independently, and the upload half has its own failure mode (below). Don't
+declare the migration done until you've watched a build actually appear in
+TestFlight.
 
 **What Xcode Cloud does not do: invite testers.** An `ARCHIVE` with
 `buildDistributionAudience` set uploads the build and stops there. If the app's
@@ -461,18 +461,25 @@ The archive succeeds, then export dies here and the artifact comes out named
 tell that it fell back rather than failing outright.
 
 This is **not** caused by configuring distribution through the API, and it is not
-a role problem. It's widely reported, and Apple has confirmed at least some cases
-as a backend permission issue on the team that only Apple can fix. Accounts with
-Account Holder + Admin still hit it; re-adding the Apple ID in Xcode doesn't
-clear it.
+a role problem — accounts with Account Holder + Admin hit it, and re-adding the
+Apple ID in Xcode doesn't clear it. It's widely reported, and Apple has confirmed
+some cases as a team-level backend issue.
+
+**Often it is transient. Retry before concluding anything.** One occurrence here
+failed this way, then the identical workflow succeeded and uploaded on a retry
+days later with no configuration change in between. Treat a single failure as
+noise, not as a verdict on the account.
 
 If you hit it:
 
-1. **Revert `buildDistributionAudience` to `null` immediately.** Otherwise every
-   push produces a failed build and burns compute for nothing.
-2. Keep archiving in the cloud and keep uploading via the Fastlane lane. This is
-   the concrete reason not to delete those lanes on migration day.
-3. Open a Feedback/DTS ticket if it persists — there is no user-side fix.
+1. **Retry once** before diagnosing. A second failure means something; the first
+   often doesn't.
+2. If it repeats, **revert `buildDistributionAudience` to `null`** so every push
+   stops burning compute on a guaranteed failure, and keep uploading via the
+   Fastlane lane meanwhile. This is the concrete reason not to delete those lanes
+   on migration day.
+3. Only then is it worth a Feedback/DTS ticket — there is no user-side fix for
+   the genuine backend case.
 
 ### Enabling distribution
 
@@ -487,18 +494,29 @@ PATCH /v1/ciWorkflows/{id}  {"data":{"type":"ciWorkflows","id":…,
                               "attributes":{"actions":[…]}}}
 ```
 
-### Migrating build numbers off Fastlane
+### You do not control the TestFlight build number from the project
 
-Xcode Cloud's run counter starts at 1 for a new product, but TestFlight already
-holds whatever the old Fastlane lane uploaded. If you wire `CFBundleVersion` to
-the cloud build number, the series collides the moment the run counter reaches a
-number already used, and ASC rejects the upload as a duplicate.
+**Xcode Cloud overwrites `CFBundleVersion` with its own `CI_BUILD_NUMBER` when
+it submits.** Whatever the project or manifest emits is discarded on that path.
+Verified: a manifest emitting `110` landed in TestFlight as build `10`, the run
+number.
 
-Add a fixed offset that clears the legacy high-water mark (`+100` if the old
-series reached 7), and never lower it. And read
-`TUIST_CI_BUILD_NUMBER`, not `CI_BUILD_NUMBER`, in a Tuist manifest — see
-`pink-lady-apple:apple-tuist` for why the plain name silently yields the
-fallback, which is exactly the duplicate-build failure you're trying to avoid.
+So don't build offset schemes or version-bumping logic for the cloud path —
+they're dead code that reads as load-bearing. The only lever is **App Store
+Connect → Xcode Cloud → Settings → Build Number**, which sets the next value and
+auto-increments from there.
+
+This has a real consequence when migrating off Fastlane: the cloud run counter
+starts at 1, while TestFlight already holds the old series. Until the run counter
+passes the old high-water mark, uploads collide and ASC rejects them as
+duplicates. Either raise the starting build number in that ASC setting before
+enabling distribution, or accept that runs below the mark will fail to upload.
+
+The project's own version still matters for **local** Fastlane builds, so keep it
+ahead of the highest build in TestFlight. And if a Tuist manifest ever does read
+a CI variable, the name must be `TUIST_`-prefixed — see
+`pink-lady-apple:apple-tuist`, since an unprefixed name silently falls back
+rather than failing.
 
 **Don't delete the Fastlane lanes when you migrate.** Keep them as the escape
 hatch for when Xcode Cloud is degraded or you need to ship without pushing, and
