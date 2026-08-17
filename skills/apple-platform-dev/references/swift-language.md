@@ -638,4 +638,3 @@ struct ContentView: View {
 - Suggests potential complexity or side effects
 - Clear that work is being done
 - Appropriate for operations with parameters or mutations
-```
