@@ -6,8 +6,10 @@ source "https://rubygems.org"
 # upload_to_testflight / latest_testflight_build_number with:
 #   "A parameter has an invalid value - 'prices' is not a valid relationship name"
 #
-# Pinning >= 2.232 keeps us on current stable; 2.232+ requires Ruby >= 2.7,
-# which is why this stack also includes .mise.toml pinning Ruby 3.3.11.
-# If you MUST run on system Ruby 2.6, cap at ~> 2.226 (last 2.6-compatible
-# version with the prices fix).
+# Pinning ~> 2.232 keeps us on current stable. Fastlane raises its Ruby
+# floor in point releases — 2.232.0 moved to Ruby >= 2.7 and 2.235.0 to
+# >= 3.0 — which is why this stack also includes .mise.toml pinning Ruby
+# 3.3.11 rather than relying on whatever Ruby the machine ships.
+# If you MUST run on system Ruby 2.6, cap at ~> 2.231.0 (2.231.1 is the
+# last 2.6-compatible release carrying the prices fix).
 gem "fastlane", "~> 2.232"

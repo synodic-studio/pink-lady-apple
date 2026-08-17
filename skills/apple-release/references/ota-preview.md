@@ -1,6 +1,6 @@
 # OTA Preview Builds Reference
 
-Self-hosted OTA app distribution at `preview.kj6.dev` via Cloudflare Pages.
+Self-hosted OTA app distribution at `<preview-host>` via Cloudflare Pages.
 
 ## Deploy Script
 
@@ -21,7 +21,7 @@ Works from any repo:
 - Registry at `~/.config/app-preview/apps.json` — each deploy is additive (existing apps stay)
 - Site files at `~/.config/app-preview/site/` — regenerated from registry on each deploy
 - Landing page auto-generated with all registered apps
-- Uses `itms-services://` protocol — open preview.kj6.dev on iPhone to install
+- Uses `itms-services://` protocol — open `<preview-host>` on iPhone to install
 - Development signing only — registered devices in provisioning profile
 - **Bump build number** between deploys or iOS won't recognize the update
 

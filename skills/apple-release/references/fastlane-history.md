@@ -31,14 +31,28 @@ Fastlane's Spaceship layer (`spaceship/lib/spaceship/connect_api/models/app.rb`)
 gem "fastlane", ">= 2.212.2"
 ```
 
-## The Ruby version cliff
+## The Ruby version cliffs
+
+Fastlane raises its `required_ruby_version` floor in ordinary point releases, with no deprecation window. The floors:
 
 | Fastlane version range | Minimum Ruby |
 |---|---|
-| 2.212.2 – 2.226.0 | 2.6 |
-| 2.227.0 – current | 2.7+ |
+| 2.207.0 – 2.231.1 | 2.6 |
+| 2.232.0 – 2.234.0 | 2.7 |
+| 2.235.0 – current | 3.0 |
 
-If you're stuck on system macOS Ruby (`2.6.10` on Sonoma and later), cap at `~> 2.226`. If you have mise or rbenv available, install Ruby 3.3.x and use current stable (`~> 2.232`) — this is the recommended standard.
+If you're stuck on system macOS Ruby (`2.6.10` on Sonoma and later), cap at `~> 2.231.0` — `2.231.1` is the newest release that carries the `prices` fix and still runs on 2.6. If you have mise or rbenv available, install Ruby 3.3.x and use current stable (`~> 2.232`) — this is the recommended standard.
+
+**Do not trust this table; re-derive it.** The floors move, and a stale table sends you to a version that will not install. The public rubygems API reports `required_ruby_version` for every release, so the whole table is one command:
+
+```bash
+curl -s https://rubygems.org/api/v1/versions/fastlane.json \
+  | jq -r '.[] | select(.prerelease | not) | [.number, .ruby_version] | @tsv' \
+  | sort -t. -k1,1n -k2,2n -k3,3n \
+  | awk -F'\t' '$2 != p { print $1 "\t" $2; p = $2 }'
+```
+
+Each row is the first fastlane release to demand that Ruby floor.
 
 ## Why mise + vendor/bundle
 
@@ -46,7 +60,7 @@ Using system Ruby + global `gem install fastlane` creates three problems:
 
 1. **Version drift across repos** — `gem install` is user-global. Every repo uses whatever was installed last. No way to pin per-project.
 2. **Native extension breakage** — on macOS updates, bundled Ruby gems with C extensions (`json`, `ffi`, `patron`, `libxml-ruby`, `digest-crc`, `bigdecimal`, `date`) often break their builds. `Ignoring ffi-1.15.5 because its extensions are not built. Try: gem pristine ffi --version 1.15.5` — you've seen this. System Ruby 2.6 on macOS Sonoma is particularly fragile.
-3. **Can't upgrade fastlane without upgrading everything** — if repo A needs fastlane 2.232 and repo B needs 2.226, you can't have both with global gems.
+3. **Can't upgrade fastlane without upgrading everything** — if repo A needs fastlane 2.232 and repo B needs 2.231, you can't have both with global gems.
 
 Solution: mise-managed Ruby (pinned per repo via `.mise.toml`) + bundler-managed gems in `vendor/bundle/` (per repo). Each repo is hermetic. `bundle install` gives you the exact version you committed in `Gemfile.lock`, nothing else.
 
@@ -57,5 +71,6 @@ Solution: mise-managed Ruby (pinned per repo via `.mise.toml`) + bundler-managed
 - [Issue #21125 — Listing apps fails due to pricing update](https://github.com/fastlane/fastlane/issues/21125)
 - [PR #21187 — [spaceship] remove deprecated attributes from apps requests](https://github.com/fastlane/fastlane/pull/21187)
 - [Release 2.212.2](https://github.com/fastlane/fastlane/releases/tag/2.212.2)
-- [RubyGems 2.226.0 — required_ruby_version >= 2.6](https://rubygems.org/gems/fastlane/versions/2.226.0)
-- [RubyGems 2.232.2 — required_ruby_version >= 2.7](https://rubygems.org/gems/fastlane/versions/2.232.2)
+- [RubyGems 2.231.1 — required_ruby_version >= 2.6](https://rubygems.org/gems/fastlane/versions/2.231.1)
+- [RubyGems 2.232.0 — required_ruby_version >= 2.7](https://rubygems.org/gems/fastlane/versions/2.232.0)
+- [RubyGems 2.235.0 — required_ruby_version >= 3.0](https://rubygems.org/gems/fastlane/versions/2.235.0)

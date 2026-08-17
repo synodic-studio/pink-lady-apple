@@ -8,9 +8,10 @@ Run via:
 Every subcommand prints its result for the caller to read; non-zero exit on
 API errors so the caller can fail loudly.
 
-Credentials are hard-wired to the user's ASC API key. The key is at
-~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8 (recoverable from
-Proton Pass if lost, per Fanta memory).
+Fill in ISSUER_ID and KEY_ID below with your own App Store Connect API key,
+and put the matching private key at
+~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8. Keep the filled-in copy
+somewhere private — never in a shared toolkit repo.
 """
 
 import argparse

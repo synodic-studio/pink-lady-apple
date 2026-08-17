@@ -12,7 +12,7 @@ Every Apple app needs the same release plumbing: Fastlane + a pinned Ruby + ASC 
 The big landmines this skill prevents:
 
 1. **The `prices` relationship bug** — fastlane ≤ 2.212.1 crashes on any ASC App lookup with `'prices' is not a valid relationship name`. Apple removed the relationship from the API in March 2023; old Spaceship code had it hard-coded. One app hit this shipping 2026-04-10. Fix: bump to `>= 2.212.2`. Full writeup in `references/fastlane-history.md`.
-2. **The Ruby 2.6 / 2.7 cliff** — system macOS Ruby is 2.6. Fastlane after `2.226.0` requires Ruby `>= 2.7`. So on system Ruby you can only use `2.212.2 ≤ fastlane ≤ 2.226.0`. With modern Ruby (via mise) you can use current stable.
+2. **The Ruby version cliffs** — system macOS Ruby is 2.6. Fastlane raises its `required_ruby_version` floor without warning: `2.232.0` is the first release needing Ruby `>= 2.7`, and `2.235.0` the first needing `>= 3.0`. So on system Ruby the usable window is `2.212.2 ≤ fastlane ≤ 2.231.1`. With modern Ruby (via mise) you can use current stable. Verify the current floors against rubygems rather than trusting this paragraph — see `references/fastlane-history.md` for the query.
 3. **Cache / Spaceship stale state** — when fastlane's build-lookup bombs during upload, the IPA is usually already signed on disk. `xcrun altool --upload-app` is the escape hatch — still fully supported by Apple for App Store uploads (only notarization subcommands were deprecated per TN3147).
 4. **The "uploaded but invisible" trap** — fastlane reports success and the build goes VALID in ASC, but no internal beta group exists, so the build never reaches the tester's phone. **`fastlane beta` succeeding is NOT shipping.** The `pink-lady-apple:testflight-ship` skill is the required follow-up — see "After every successful beta upload" below. One app's build 1 (2026-05-03) hit this exact failure: upload reported `🎉 finished successfully`, ASC said VALID, but the tester's phone showed nothing because no `InternalTesters` group existed yet.
 5. **Defensive post-upload chain: auto-notify + add-build-to-group + ensure-invited** — `templates/Fastfile-ios.tmpl` chains all three (each `--app-id APP_ID`, no hard-coded group id) after `upload_to_testflight`. The load-bearing one is **`add-build-to-group`**: an internal group with `hasAccessToAllBuilds=false` does NOT receive new builds automatically, so without an explicit link the build goes VALID in ASC but never reaches a single device. This was silently missing from the template for months and is the #1 cause of "you didn't add me again" — the build uploads, the lane reports success, and the tester stays on an old build. `add-build-to-group` now POSTs the link, **verifies it by reading the group's build list** (Apple disallows `GET /builds/{id}/betaGroups`, so verify via the group, not the build), **retries** for ~36s while ASC associates, and **exits non-zero if it never lands** so the lane fails loudly instead of silently. All three commands are idempotent and auto-resolve the internal group from `--app-id`. If a tester reports nothing, run `group-builds --group-id <id>` first — if the build isn't listed, the link failed; re-run `add-build-to-group --app-id <APP_ID>`.
@@ -38,7 +38,7 @@ For any new Apple app (iOS or macOS):
 |---|---|---|
 | Ruby | `3.3.11` via mise | Pinned in `.mise.toml` |
 | Bundler | latest | Installed into mise-managed Ruby |
-| Fastlane | `~> 2.232` | Current stable, requires Ruby ≥ 2.7 |
+| Fastlane | `~> 2.232` | Resolves to current stable, which requires Ruby ≥ 3.0 — satisfied by the pinned Ruby |
 | Gem path | `vendor/bundle` | Via `.bundle/config`, project-local, not global |
 | ASC auth | API key `.p8` | `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` |
 | ASC issuer | `<ASC_ISSUER_ID>` | Shared across all your apps |
@@ -188,7 +188,7 @@ mise exec -- bundle update fastlane
 mise exec -- bundle exec fastlane beta_probe
 ```
 
-If you cannot bump (stuck on system Ruby 2.6 and don't want mise), cap at `~> 2.226` which is the last Ruby-2.6-compatible version with the fix.
+If you cannot bump (stuck on system Ruby 2.6 and don't want mise), cap at `~> 2.231.0`; `2.231.1` is the last Ruby-2.6-compatible release carrying the fix.
 
 If you need to ship RIGHT NOW and can't wait for a bundle update, use altool:
 ```bash
@@ -208,7 +208,7 @@ Check active Ruby: `mise exec -- ruby --version`
 
 If it's still 2.6, the repo is missing `.mise.toml` or mise isn't activated. Scaffold step 2 + `mise trust` + `mise install`.
 
-If you don't want mise, cap fastlane: `gem "fastlane", "~> 2.226"` in the Gemfile.
+If you don't want mise, cap fastlane: `gem "fastlane", "~> 2.231.0"` in the Gemfile.
 
 ### `Latest upload for version ... build: N` shows an OLD build
 
@@ -253,7 +253,7 @@ Skill references also moved namespace: `pink-lady:testflight-ship` is now
 
 Full writeup in `references/fastlane-history.md`. One-sentence version: Apple removed the `prices` relationship from the `apps` resource in the App Store Connect API during the March 2023 pricing overhaul; fastlane's Spaceship had it hard-coded in `ESSENTIAL_INCLUDES`; [PR #21187](https://github.com/fastlane/fastlane/pull/21187) removed it in fastlane 2.212.2.
 
-Every fastlane version from 2.205.1 (our old pin) through 2.212.1 is broken. The window that works on system Ruby 2.6 is `2.212.2 ≤ fastlane ≤ 2.226.0`. With modern Ruby via mise, use current stable (`~> 2.232`).
+Every fastlane version from 2.205.1 (our old pin) through 2.212.1 is broken. The window that works on system Ruby 2.6 is `2.212.2 ≤ fastlane ≤ 2.231.1`. With modern Ruby via mise, use current stable (`~> 2.232`).
 
 ## Signing: `fastlane match` (as of 2026-04-14)
 
