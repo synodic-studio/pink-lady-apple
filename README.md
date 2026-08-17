@@ -29,6 +29,15 @@ These skills use placeholders (`<TEAM_ID>`, `<ASC_KEY_ID>`, `<ASC_ISSUER_ID>`,
 and keep the filled-in copy in a **private** location — not in a shared toolkit
 repo. See `skills/apple-platform-dev/references/apple-config.md` for the template.
 
+## Demo
+
+`scripts/demo.sh` is a four-beat walkthrough for a screen share: one encoded
+trap quoted verbatim, a live count of how much of the plugin is failure
+knowledge, the skill's Ruby-floor claims checked against rubygems in real time,
+and the install/inventory/token-cost handoff. It reads only public data and
+needs no credentials. `--auto` runs it unattended, `--cleanup` clears the
+fetched response, `-h` prints the full header. Settings: `scripts/demo.env.example`.
+
 ## Related
 
 - **swiftskim** — SwiftUI code-quality rules + SwiftSyntax linting (the `swift-quality` skill). Referenced by `apple-platform-dev` for code-quality guidance.
