@@ -279,11 +279,16 @@ beat "2/4" "How much of this plugin is failure knowledge"
 cue "Say: one grep, one pattern, no curated list of strings." \
     "Every skill has a section whose entire job is the ways this breaks."
 
-runsh "grep -rniE '^## .*(troubleshoot|gotcha|mistake|silent failure|common error|what NOT to do|\\bbug\\b|\\btrap\\b|landmine|block a )' skills/ --include='*.md'"
+# One copy of the pattern. If the list on screen and the count under it were
+# allowed to drift apart, the demo would contradict itself in front of the
+# audience — which is precisely what it is here to argue against.
+TRAP_RE='^## .*(troubleshoot|gotcha|mistake|silent failure|common error|what NOT to do|\bbug\b|\btrap\b|landmine|block a )'
 
-TRAP_SECTIONS="$(grep -rniE '^## .*(troubleshoot|gotcha|mistake|silent failure|common error|what NOT to do|\bbug\b|\btrap\b|landmine|block a )' skills/ --include='*.md' 2>/dev/null | wc -l | tr -d ' ')"
+run grep -rniE "$TRAP_RE" skills/ --include=*.md
+
+TRAP_SECTIONS="$(grep -rniE "$TRAP_RE" skills/ --include='*.md' 2>/dev/null | wc -l | tr -d ' ')"
 SKILLS="$(find skills -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')"
-WITH_TRAPS="$(grep -rliE '^## .*(troubleshoot|gotcha|mistake|silent failure|common error|what NOT to do|\bbug\b|\btrap\b|landmine|block a )' skills/ --include='*.md' 2>/dev/null | cut -d/ -f2 | sort -u | wc -l | tr -d ' ')"
+WITH_TRAPS="$(grep -rliE "$TRAP_RE" skills/ --include='*.md' 2>/dev/null | cut -d/ -f2 | sort -u | wc -l | tr -d ' ')"
 CORPUS_FILES="$(find skills -type f \( -name '*.md' -o -name '*.py' -o -name '*.tmpl' \) | wc -l | tr -d ' ')"
 CORPUS_LINES="$(find skills -type f \( -name '*.md' -o -name '*.py' -o -name '*.tmpl' \) -exec cat {} + | wc -l | tr -d ' ')"
 
