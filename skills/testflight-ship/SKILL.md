@@ -57,7 +57,7 @@ Only needed when the app doesn't exist in ASC yet.
 ### 1a. Register the bundle ID (API does this)
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py register-bundle \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py register-bundle \
   --identifier com.example.MyApp \
   --name "MyApp"
 ```
@@ -69,7 +69,7 @@ This POSTs to `/v1/bundleIds`. Works with API key auth. Returns the bundle ID re
 Each capability needed by the app (NFC, background modes, HealthKit, etc.) must be enabled on the bundle ID record BEFORE the first build, or provisioning profiles won't include them.
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py add-capability \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py add-capability \
   --bundle-record <bundle-record-id> \
   --capability NFC_TAG_READING
 ```
@@ -98,7 +98,7 @@ The correct play: prompt the user with exact field values, wait for confirmation
 After confirmation, fetch the app ID for later steps:
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py find-app \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py find-app \
   --bundle-id com.example.MyApp
 # → prints app id (e.g. <app-id>)
 ```
@@ -211,7 +211,7 @@ end
 
 ```ruby
 tf_latest_str = sh(
-  "uv tool run --from authlib --with httpx python3 #{asc_script} build-status --app-id #{app_id} --limit 1 2>&1 | head -1 | grep -oE 'build [0-9]+' | awk '{print $2}'",
+  "uv tool run --from joserfc --with httpx python3 #{asc_script} build-status --app-id #{app_id} --limit 1 2>&1 | head -1 | grep -oE 'build [0-9]+' | awk '{print $2}'",
   log: false,
 ).strip
 tf_latest = tf_latest_str.to_i
@@ -249,7 +249,7 @@ If you stop after `fastlane finished successfully 🎉` on a first build without
 ### 4a. Verify the build is VALID
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py build-status \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py build-status \
   --app-id <app-id>
 # → build 50: processingState=VALID expired=False
 ```
@@ -263,7 +263,7 @@ If `processingState` is still `PROCESSING`, wait 30-60 seconds and retry. If it'
 If you baked in `ITSAppUsesNonExemptEncryption: false` per step 2, skip this — the compliance declaration rides along with the build automatically. If not:
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py declare-compliance \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py declare-compliance \
   --build-id <build-id> \
   --uses-non-exempt-encryption false
 ```
@@ -294,7 +294,7 @@ POST /v1/betaGroups
 Via the helper script:
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py create-internal-group \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py create-internal-group \
   --app-id <app-id> \
   --name InternalTesters
 ```
@@ -306,7 +306,7 @@ If you forget `isInternalGroup: true` and `hasAccessToAllBuilds: true`, you get 
 For internal groups, testers are created as `betaTester` records with the group relationship — same endpoint as external, just scoped to an internal group. The group stays internal (`isInternalGroup=true`) after attaching betaTesters.
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py add-tester \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py add-tester \
   --group-id <group-id> \
   --email tester@example.com \
   --first-name <First> \
@@ -322,7 +322,7 @@ Tester records are per-app — you cannot reuse a tester record from a different
 **Edge case — `hasAccessToAllBuilds: false`.** Some internal groups (e.g. an app's "Internal Testers" group, group ID `<group-id>`) are flagged internal but have `hasAccessToAllBuilds: false`. These do NOT auto-receive builds and require an explicit link. Use `add-build-to-group` from the betaGroups side (not `distribute`, which refuses internal groups):
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py add-build-to-group \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py add-build-to-group \
   --app-id <app-id> \
   --group-id <group-id>
 # Resolved latest build: v<N> (<build-id>)
@@ -341,7 +341,7 @@ External groups DO need explicit distribution via `distribute` (see below).
 PATCH it true after every upload:
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py auto-notify \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py auto-notify \
   --app-id <app-id>
 # resolves to the most recent build for the app and PATCHes
 # Build <id>: autoNotifyEnabled=True internalBuildState=IN_BETA_TESTING
@@ -356,7 +356,7 @@ Even with autoNotify on, internal-group `hasAccessToAllBuilds: true` does NOT ac
 The fix is to explicitly POST every internal-group tester to the build's `individualTesters` relationship — that flips `state` to `INVITED`, which is what TestFlight actually checks before pushing.
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py ensure-invited \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py ensure-invited \
   --app-id <app-id>
 # Latest build: v<N> (<build-id>)
 # Internal groups: ['InternalTesters']
@@ -369,15 +369,15 @@ Idempotent — Apple returns `409 STATE_ERROR: Tester(s) cannot be assigned` whe
 ### 4f. Verify — confirm the build is visible to the group and the tester is present
 
 ```bash
-uv tool run --from authlib --with httpx python3 scripts/asc.py group-details \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py group-details \
   --group-id <group-id>
 # Should show isInternalGroup=True hasAccessToAllBuilds=True
 
-uv tool run --from authlib --with httpx python3 scripts/asc.py group-builds \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py group-builds \
   --group-id <group-id>
 # Should list build 50 as VALID
 
-uv tool run --from authlib --with httpx python3 scripts/asc.py list-testers \
+uv tool run --from joserfc --with httpx python3 scripts/asc.py list-testers \
   --group-id <group-id>
 # Should list the tester's email
 ```

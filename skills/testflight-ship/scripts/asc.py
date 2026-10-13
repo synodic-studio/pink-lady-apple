@@ -3,7 +3,7 @@
 ASC API helper for the testflight-ship skill.
 
 Run via:
-  uv tool run --from authlib --with httpx python3 asc.py <subcommand> [args]
+  uv tool run --from joserfc --with httpx python3 asc.py <subcommand> [args]
 
 Every subcommand prints its result for the caller to read; non-zero exit on
 API errors so the caller can fail loudly.
@@ -21,10 +21,11 @@ import time
 from pathlib import Path
 
 try:
-    from authlib.jose import jwt
     import httpx
+    from joserfc import jwt
+    from joserfc.jwk import ECKey
 except ImportError:
-    print("Install: uv pip install authlib httpx", file=sys.stderr)
+    print("Install: uv pip install joserfc httpx", file=sys.stderr)
     sys.exit(1)
 
 ISSUER_ID = "<ASC_ISSUER_ID>"
@@ -35,7 +36,7 @@ BASE_URL = "https://api.appstoreconnect.apple.com/v1"
 
 def token() -> str:
     """Mint a short-lived JWT for ASC API auth."""
-    key = KEY_PATH.read_text()
+    key = ECKey.import_key(KEY_PATH.read_text())
     header = {"alg": "ES256", "kid": KEY_ID, "typ": "JWT"}
     now = int(time.time())
     payload = {
@@ -44,7 +45,7 @@ def token() -> str:
         "exp": now + 1200,
         "aud": "appstoreconnect-v1",
     }
-    return jwt.encode(header, payload, key).decode()
+    return jwt.encode(header, payload, key)
 
 
 def headers(content_type: bool = False) -> dict:
