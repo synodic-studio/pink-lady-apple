@@ -105,14 +105,14 @@ platform :ios do
                        "<checkout>/skills/testflight-ship/scripts/asc.py")
       end,
     )
-    sh("uv tool run --from authlib --with httpx python3 #{asc_script} auto-notify --app-id APP_ID")
+    sh("uv tool run --from joserfc --with httpx python3 #{asc_script} auto-notify --app-id APP_ID")
     # REQUIRED: link the build to the internal group (auto-resolved) and verify it
     # landed. Internal groups with hasAccessToAllBuilds=false do NOT get new builds
     # automatically — without this the build is VALID in ASC but never reaches any
     # tester's device. add-build-to-group retries and exits non-zero if the build
     # doesn't show up in the group, so a broken distribution FAILS the lane loudly
     # instead of silently leaving testers on an old build.
-    sh("uv tool run --from authlib --with httpx python3 #{asc_script} add-build-to-group --app-id APP_ID")
-    sh("uv tool run --from authlib --with httpx python3 #{asc_script} ensure-invited --app-id APP_ID")
+    sh("uv tool run --from joserfc --with httpx python3 #{asc_script} add-build-to-group --app-id APP_ID")
+    sh("uv tool run --from joserfc --with httpx python3 #{asc_script} ensure-invited --app-id APP_ID")
   end
 end
